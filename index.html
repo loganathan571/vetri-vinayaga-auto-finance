@@ -11,6 +11,20 @@
 .loginhint{text-align:center;color:#98a2b3;font-size:11px;margin-top:12px}
 .settings{background:white;border-radius:16px;padding:14px;margin-bottom:10px;border:1px solid #edf0f5}
 .danger{color:#b42318}
+
+.v3modal{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:90;overflow:auto;padding:18px}
+.v3box{max-width:720px;margin:20px auto;background:#fff;border-radius:20px;padding:18px}
+.v3grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.v3grid label{font-size:12px;color:#667085;display:block}
+.v3grid input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #d0d5dd;border-radius:10px;margin-top:4px}
+.v3summary{background:#f8fafc;border:1px solid #e4e7ec;border-radius:14px;padding:12px;margin:12px 0;font-size:13px;line-height:1.7}
+.v3table{width:100%;border-collapse:collapse;font-size:12px}
+.v3table th,.v3table td{padding:8px;border-bottom:1px solid #eaecf0;text-align:left}
+.v3badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:700}
+.v3pending{background:#fff4e5;color:#b54708}
+.v3paid{background:#ecfdf3;color:#027a48}
+.v3overdue{background:#fef3f2;color:#b42318}
+.v3fab{position:fixed;right:20px;bottom:78px;width:56px;height:56px;border:0;border-radius:50%;font-size:28px;background:#175cd3;color:white;z-index:50;box-shadow:0 6px 20px #0003}
 </style></head><body><div class="app" id="app"></div><div id="modal" class="modal hidden"></div><div id="toast" class="toast hidden"></div>
 <div id="login" class="login hidden">
   <div class="loginbox">
@@ -130,6 +144,118 @@ function initV2(){
   else if(sessionStorage.getItem('vvaf_unlocked')!=='1') showLogin('login');
 }
 
+
+// ===== V3 Finance + EMI =====
+db.finances = Array.isArray(db.finances) ? db.finances : [];
+
+function v3Money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
+function v3Today(){return new Date().toISOString().slice(0,10);}
+function v3AddMonths(s,months){
+  const d=new Date(s+'T12:00:00'), day=d.getDate();
+  const y=d.getFullYear(), m=d.getMonth()+months;
+  const last=new Date(y,m+1,0).getDate();
+  return new Date(y,m,Math.min(day,last),12).toISOString().slice(0,10);
+}
+function v3Calc(){
+ const price=+document.getElementById('v3Price').value||0;
+ const down=+document.getElementById('v3Down').value||0;
+ const docPct=+document.getElementById('v3DocPct').value||0;
+ const interest=+document.getElementById('v3Interest').value||0;
+ const tenure=Math.max(1,parseInt(document.getElementById('v3Tenure').value||1,10));
+ const loanDate=document.getElementById('v3LoanDate').value||v3Today();
+ const balance=Math.max(0,price-down);
+ const doc=balance*docPct/100;
+ const finance=balance+doc;
+ const monthlyInterest=finance*interest/100;
+ const principal=finance/tenure;
+ const emi=Math.round((principal+monthlyInterest)*100)/100;
+ const total=Math.round(emi*tenure*100)/100;
+ document.getElementById('v3Summary').innerHTML=
+ `<b>Balance:</b> ${v3Money(balance)} &nbsp; <b>Document:</b> ${v3Money(doc)}<br>
+ <b>Finance:</b> ${v3Money(finance)} &nbsp; <b>Monthly Interest:</b> ${v3Money(monthlyInterest)}<br>
+ <b>EMI:</b> ${v3Money(emi)} &nbsp; <b>Total Payable:</b> ${v3Money(total)}<br>
+ <small>Tenure ${tenure} months → ${tenure} dues. First due is next month from loan date.</small>`;
+ let rows='';
+ for(let i=1;i<=tenure;i++){
+   rows+=`<tr><td>${i}</td><td>${v3AddMonths(loanDate,i)}</td><td>${v3Money(emi)}</td><td><span class="v3badge v3pending">Pending</span></td></tr>`;
+ }
+ document.getElementById('v3Schedule').innerHTML=
+ `<table class="v3table"><thead><tr><th>Due</th><th>Due Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+ return {price,down,docPct,interest,tenure,loanDate,balance,doc,finance,monthlyInterest,emi,total};
+}
+function openV3Finance(){
+ document.getElementById('v3FinanceModal').classList.remove('hidden');
+ document.getElementById('v3LoanDate').value=v3Today();
+ ['v3LoanDate','v3Tenure','v3Price','v3Down','v3DocPct','v3Interest'].forEach(id=>{
+   const e=document.getElementById(id); e.oninput=v3Calc; e.onchange=v3Calc;
+ });
+ v3Calc();
+}
+function closeV3Finance(){document.getElementById('v3FinanceModal').classList.add('hidden');}
+function saveV3Finance(){
+ const c=v3Calc(), schedule=[];
+ for(let i=1;i<=c.tenure;i++) schedule.push({no:i,dueDate:v3AddMonths(c.loanDate,i),amount:c.emi,status:'Pending',paidDate:null});
+ db.finances.push({id:'FIN-'+Date.now().toString().slice(-8),...c,documentCharge:c.doc,financeAmount:c.finance,totalPayable:c.total,paidAmount:0,outstanding:c.total,schedule});
+ if(typeof save==='function')save();
+ closeV3Finance(); if(typeof toast==='function')toast('Finance saved ✓'); if(typeof render==='function')render();
+}
+function openV3Settings(){document.getElementById('v3SettingsModal').classList.remove('hidden');}
+function closeV3Settings(){document.getElementById('v3SettingsModal').classList.add('hidden');}
+function backupV3Data(){
+ const blob=new Blob([JSON.stringify({version:3,exportedAt:new Date().toISOString(),data:db},null,2)],{type:'application/json'});
+ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='vetri-vinayaga-backup-'+v3Today()+'.json'; a.click();
+ setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function restoreV3Data(){
+ const i=document.createElement('input'); i.type='file'; i.accept='application/json';
+ i.onchange=async()=>{try{
+  const p=JSON.parse(await i.files[0].text());
+  if(!p.data||!Array.isArray(p.data.customers))throw 0;
+  db=p.data; db.finances=Array.isArray(db.finances)?db.finances:[]; save(); render(); closeV3Settings(); toast('Backup restored ✓');
+ }catch(e){toast('Invalid backup file');}};
+ i.click();
+}
+// Put Settings & Backup on the More screen.
+const _oldMore=window.more;
+if(typeof _oldMore==='function'){
+ window.more=function(){
+   let s=_oldMore.apply(this,arguments);
+   const insert='<div style="margin:14px 0"><button class="btn" style="width:100%" onclick="openV3Settings()">⚙️ Settings & Backup</button></div>';
+   return String(s).replace('</div>',insert+'</div>');
+ };
+}
+
 initV2();
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {})); }
-</script></body></html>
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js', {scope:'./'}).catch(() => {})); }
+</script>
+<button id="v3Fab" class="v3fab" onclick="openV3Finance()">＋</button>
+<div id="v3FinanceModal" class="v3modal hidden">
+<div class="v3box">
+<h2 style="margin-top:0">New Finance</h2>
+<div class="v3grid">
+<div><label>Loan Date</label><input id="v3LoanDate" type="date"></div>
+<div><label>Tenure (Months)</label><input id="v3Tenure" type="number" min="1" value="12"></div>
+<div><label>Vehicle Price</label><input id="v3Price" type="number" min="0"></div>
+<div><label>Down Payment</label><input id="v3Down" type="number" min="0"></div>
+<div><label>Document Charge %</label><input id="v3DocPct" type="number" min="0" step="0.01" value="10"></div>
+<div><label>Interest % / Month</label><input id="v3Interest" type="number" min="0" step="0.01" value="2.5"></div>
+</div>
+<div id="v3Summary" class="v3summary"></div>
+<h3>EMI Schedule</h3>
+<div id="v3Schedule"></div>
+<div style="margin-top:14px;display:flex;gap:8px">
+<button class="btn primary" onclick="saveV3Finance()">Save Finance</button>
+<button class="btn" onclick="closeV3Finance()">Cancel</button>
+</div>
+</div></div>
+
+<div id="v3SettingsModal" class="v3modal hidden">
+<div class="v3box">
+<h2 style="margin-top:0">Settings & Backup</h2>
+<button class="btn" style="width:100%;margin-bottom:8px" onclick="changePin()">🔐 Change PIN</button>
+<button class="btn" style="width:100%;margin-bottom:8px" onclick="backupV3Data()">💾 Backup Data</button>
+<button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreV3Data()">♻️ Restore Backup</button>
+<button class="btn" style="width:100%;margin-bottom:8px" onclick="lockApp()">🔒 Lock App</button>
+<button class="btn" style="width:100%" onclick="closeV3Settings()">Close</button>
+</div></div>
+</body></html>
