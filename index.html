@@ -50,7 +50,9 @@ function whatsappReminder(fid){
   if(mobile.length<10) return toast('Customer mobile number இல்லை');
   let inst=installmentFor(f),d=nextDue(f)?.dueDate||'-';
   let todayKey=today(), status=d<todayKey?'OVERDUE':d===todayKey?'DUE':'UPCOMING';
-  let msg=`வணக்கம் ${c.name||''},\n\nVetri Vinayaga Auto Finance\nVehicle: ${f.vehicleNo||'-'}\nEMI: #${inst} / ${f.tenure}\nAmount: ${money(f.emi)}\nDue Date: ${d}\nStatus: ${status}\n\nதயவு செய்து EMI தொகையை due date-க்குள் செலுத்தவும்.\nநன்றி.`;
+  let prettyDate=d==='-'?'-':d.split('-').reverse().join('-');
+  let statusTa=status==='OVERDUE'?'தாமதமாக உள்ளது':status==='DUE'?'இன்று செலுத்த வேண்டியது':'வரவிருக்கும் EMI';
+  let msg=`வணக்கம் ${c.name||''} அவர்களே 🙏\n\nVetri Vinayaga Auto Finance\n\n🏍️ வாகனம்: ${f.vehicleNo||'-'}\n📌 EMI: #${inst} / ${f.tenure}\n💰 தொகை: ${money(f.emi)}\n📅 Due Date: ${prettyDate}\n📍 நிலை: ${statusTa}\n\nதயவு செய்து EMI தொகையை Due Date-க்குள் செலுத்தவும்.\n\nநன்றி.\nVetri Vinayaga Auto Finance`;
   window.open('https://wa.me/'+mobile+'?text='+encodeURIComponent(msg),'_blank');
 }
 function setCollectionTab(tab){collectionTab=tab;render()}
