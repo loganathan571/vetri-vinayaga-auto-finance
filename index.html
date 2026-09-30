@@ -5,8 +5,11 @@
 const KEY='vvaf_v2';
 let db=JSON.parse(localStorage.getItem(KEY)||'null')||{customers:[],vehicles:[],finances:[],payments:[],transactions:[]};
 db.customers=Array.isArray(db.customers)?db.customers:[];db.vehicles=Array.isArray(db.vehicles)?db.vehicles:[];db.finances=Array.isArray(db.finances)?db.finances:[];db.payments=Array.isArray(db.payments)?db.payments:[];db.transactions=Array.isArray(db.transactions)?db.transactions:[];
+function repairSchedules(){db.finances.forEach(f=>{if(!Array.isArray(f.schedule)||f.schedule.length!==Number(f.tenure||0)||f.schedule.some((x,i)=>!x||!/^\d{4}-\d{2}-\d{2}$/.test(String(x.dueDate||'')))){let ps=db.payments.filter(p=>p.financeId===f.id).sort((a,b)=>new Date(a.date)-new Date(b.date));let first=ps.find(p=>Number(p.installment||0)===1)||ps[0];let base=f.loanDate|| (first&&first.date?String(first.date).slice(0,10):'');if(base&&f.tenure){f.schedule=[];for(let i=1;i<=Number(f.tenure);i++)f.schedule.push({no:i,dueDate:addMonths(base,i),amount:Number(f.emi||0),status:'Pending',paidDate:null});}}});save()}
+
 let page='home';
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}function today(){return new Date().toISOString().slice(0,10)}function addMonths(s,n){let d=new Date(s+'T12:00:00'),day=d.getDate(),y=d.getFullYear(),m=d.getMonth()+n,last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last),12).toISOString().slice(0,10)}function toast(t){let x=document.getElementById('toast');if(!x){x=document.createElement('div');x.id='toast';x.style='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0b1220;color:#fff;padding:12px 17px;border-radius:14px;z-index:300;font-weight:800';document.body.appendChild(x)}x.textContent=t;x.classList.remove('hidden');setTimeout(()=>x.classList.add('hidden'),1800)}
+repairSchedules();
 function paidFor(f){return db.payments.filter(p=>p.financeId===f.id).reduce((s,p)=>s+Number(p.amount||0),0)}function installmentFor(f){let ps=db.payments.filter(p=>p.financeId===f.id);return Math.min(f.tenure||1,ps.length+1)}function outstanding(f){return Math.max(0,Number(f.totalPayable||0)-paidFor(f))}function dueStatus(f){let paid=db.payments.filter(p=>p.financeId===f.id).length;return paid>=Number(f.tenure||0)?'COMPLETED':'DUE'}
 function stats(){let income=db.transactions.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount||0),0),expense=db.transactions.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount||0),0),out=db.finances.reduce((a,f)=>a+outstanding(f),0);return{income,expense,out,active:db.finances.filter(f=>dueStatus(f)!=='COMPLETED').length}}
 function nav(){return `<div class="bottom"><button class="nav ${page==='home'?'active':''}" onclick="go('home')"><span>⌂</span>Home</button><button class="nav ${page==='customers'?'active':''}" onclick="go('customers')"><span>👤</span>Customers</button><button class="nav ${page==='collection'?'active':''}" onclick="go('collection')"><span>₹</span>Collection</button><button class="nav ${page==='more'?'active':''}" onclick="go('more')"><span>☷</span>More</button></div>`}
@@ -14,7 +17,17 @@ function home(){let s=stats();return `<div class="top"><div class="brand">Vetri 
 function recent(){let a=db.payments.slice(-5).reverse();return a.length?`<div class="list">${a.map(p=>{let f=db.finances.find(x=>x.id===p.financeId),c=f&&db.customers.find(x=>x.id===f.customerId);return `<div class="item"><div class="row"><b>${esc(c?.name||'Customer')}</b><span class="pill">PAID</span></div><div class="muted">${esc(f?.vehicleNo||'')} · ${new Date(p.date).toLocaleDateString('en-IN')}</div><div style="margin-top:5px;font-weight:800">${money(p.amount)}</div></div>`}).join('')}</div>`:'<div class="empty">இன்னும் payment இல்லை</div>'}
 function customers(){return `<div class="top"><div class="brand">Customers</div><div class="sub">Customer & RC details</div></div><div class="content"><div class="actions"><button class="action primary" onclick="openCustomer()"><b>＋</b>New Customer</button><button class="action" onclick="openFinance()"><b>₹</b>New Finance</button></div>${db.customers.length?`<div class="list">${db.customers.slice().reverse().map(c=>{let fs=db.finances.filter(x=>x.customerId===c.id),f=fs[0];return `<div class="item" onclick="customerDetail('${c.id}')"><div class="row"><b>${esc(c.name)}</b><span class="pill ${f?'':'amber'}">${f?'ACTIVE':'NO FINANCE'}</span></div><div class="muted">📞 ${esc(c.mobile||'-')} · 🛵 ${esc(f?.vehicleNo||'No vehicle')}</div><div style="margin-top:7px">${f?`EMI ${money(f.emi)} · ${f.tenure} months`:'Add finance'}</div></div>`}).join('')}</div>`:'<div class="empty">Customer இல்லை.<br>New Customer-ஐ press பண்ணுங்க.</div>'}</div>${nav()}<button class="fab" onclick="openCustomer()">＋</button>`}
 let collectionTab='pending';
-function nextDue(f){let inst=installmentFor(f);if(f.schedule&&f.schedule[inst-1]) return f.schedule[inst-1];if(f.loanDate&&f.tenure){return {no:inst,dueDate:addMonths(f.loanDate,inst),amount:Number(f.emi||0),status:'Pending',paidDate:null}}return null}
+function nextDue(f){
+  let inst=installmentFor(f);
+  let scheduled=f.schedule&&f.schedule[inst-1];
+  if(scheduled&&scheduled.dueDate&&/^\d{4}-\d{2}-\d{2}$/.test(String(scheduled.dueDate))){return {...scheduled,no:inst,amount:Number(scheduled.amount||f.emi||0)}}
+  let ps=db.payments.filter(p=>p.financeId===f.id).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  let first=ps.find(p=>Number(p.installment||0)===1)||ps[0];
+  let base=f.loanDate || (first&&first.date?String(first.date).slice(0,10):'');
+  if(base&&f.tenure){let due=addMonths(base, f.loanDate ? inst : Math.max(1,inst-1));return {no:inst,dueDate:due,amount:Number(f.emi||0),status:'Pending',paidDate:null}}
+  return null;
+}
+
 function collection(){
   let active=db.finances.filter(f=>dueStatus(f)!=='COMPLETED');
   let todayKey=today();
