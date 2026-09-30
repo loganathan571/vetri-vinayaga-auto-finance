@@ -1,7 +1,29 @@
 <!doctype html><html lang="ta"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1220"><meta name="description" content="Second-hand two wheeler auto finance management"><link rel="manifest" href="./manifest.json"><link rel="icon" href="./icon-192.png"><title>Vetri Vinayaga Auto Finance</title><style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Noto Sans Tamil",sans-serif;background:#f5f7fb;color:#101828}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0}.app{max-width:520px;margin:auto;min-height:100vh;background:#f5f7fb}.top{background:#0b1220;color:white;padding:22px 18px 18px;border-radius:0 0 24px 24px}.brand{font-size:21px;font-weight:800}.sub{opacity:.65;font-size:12px;margin-top:3px}.search{margin-top:16px;background:#172033;border:1px solid #2b374d;color:white;border-radius:14px;padding:12px 14px;width:100%;outline:0}.content{padding:16px 16px 100px}.row{display:flex;gap:10px;align-items:center;justify-content:space-between}.title{font-size:17px;font-weight:800;margin:4px 0 12px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{background:white;border-radius:16px;padding:14px;box-shadow:0 2px 10px #1018280b;border:1px solid #edf0f5}.metric{font-size:20px;font-weight:800;margin-top:4px}.muted{font-size:12px;color:#667085}.green{color:#079455}.red{color:#d92d20}.blue{color:#175cd3}.amber{color:#b54708}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.action{padding:14px;border-radius:15px;background:white;border:1px solid #e4e7ec;font-weight:750;text-align:left}.action b{display:block;font-size:22px;margin-bottom:4px}.primary{background:#175cd3;color:white}.list{display:flex;flex-direction:column;gap:9px}.item{background:white;border-radius:15px;padding:13px;border:1px solid #edf0f5}.pill{font-size:11px;padding:5px 8px;border-radius:20px;background:#ecfdf3;color:#067647}.pill.red{background:#fef3f2;color:#b42318}.pill.amber{background:#fffaeb;color:#b54708}.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);max-width:520px;width:100%;background:white;border-top:1px solid #e4e7ec;display:grid;grid-template-columns:repeat(4,1fr);padding:8px 8px calc(8px + env(safe-area-inset-bottom));z-index:10}.nav{background:transparent;color:#667085;font-size:11px;padding:5px}.nav.active{color:#175cd3;font-weight:800}.nav span{display:block;font-size:19px;margin-bottom:2px}.fab{position:fixed;right:22px;bottom:78px;width:54px;height:54px;border-radius:50%;background:#175cd3;color:white;font-size:28px;box-shadow:0 8px 20px #175cd34d}.hidden{display:none!important}.modal{position:fixed;inset:0;background:#10182866;display:flex;align-items:flex-end;z-index:20}.sheet{background:white;width:100%;max-width:520px;margin:auto;border-radius:24px 24px 0 0;padding:18px;max-height:90vh;overflow:auto}.sheet h2{margin:0 0 15px}.field{margin:10px 0}.field label{display:block;font-size:12px;font-weight:700;color:#475467;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;outline:0}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.btnrow{display:flex;gap:10px;margin-top:15px}.btn{flex:1;padding:12px;border-radius:12px;font-weight:800;background:#f2f4f7}.btn.primary{background:#175cd3;color:white}.tab{display:flex;gap:8px;overflow:auto;margin-bottom:12px}.tab button{white-space:nowrap;background:white;border:1px solid #e4e7ec;padding:8px 12px;border-radius:20px;font-size:12px}.tab button.sel{background:#175cd3;color:white;border-color:#175cd3}.empty{padding:25px;text-align:center;color:#667085;background:white;border-radius:15px}.detailhead{background:#0b1220;color:white;border-radius:18px;padding:16px;margin-bottom:12px}.progress{height:8px;background:#eaecf0;border-radius:10px;overflow:hidden;margin-top:8px}.progress i{display:block;height:100%;background:#12b76a}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:135px;background:#101828;color:white;padding:10px 15px;border-radius:10px;font-size:13px;z-index:30}
-</style></head><body><div class="app" id="app"></div><div id="modal" class="modal hidden"></div><div id="toast" class="toast hidden"></div><script>
-const KEY='vvaf_v1';let db=JSON.parse(localStorage.getItem(KEY)||'null')||{customers:[],vehicles:[],finances:[],payments:[],transactions:[]};let page='home';
+
+.login{position:fixed;inset:0;background:#0b1220;color:white;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
+.loginbox{width:100%;max-width:420px;background:#121c2f;border:1px solid #2b374d;border-radius:24px;padding:26px;box-shadow:0 20px 60px #0008}
+.loginlogo{width:72px;height:72px;border-radius:20px;margin:0 auto 16px;display:block}
+.loginbox h1{text-align:center;margin:0;font-size:23px}
+.loginbox p{text-align:center;color:#98a2b3;font-size:13px}
+.pininput{width:100%;padding:15px;border-radius:14px;border:1px solid #344054;background:#0b1220;color:white;text-align:center;font-size:25px;letter-spacing:8px;outline:none}
+.loginbtn{width:100%;padding:13px;border-radius:13px;background:#175cd3;color:white;font-weight:800;margin-top:12px}
+.loginhint{text-align:center;color:#98a2b3;font-size:11px;margin-top:12px}
+.settings{background:white;border-radius:16px;padding:14px;margin-bottom:10px;border:1px solid #edf0f5}
+.danger{color:#b42318}
+</style></head><body><div class="app" id="app"></div><div id="modal" class="modal hidden"></div><div id="toast" class="toast hidden"></div>
+<div id="login" class="login hidden">
+  <div class="loginbox">
+    <img class="loginlogo" src="./icon-192.png" alt="VV">
+    <h1>Vetri Vinayaga Auto Finance</h1>
+    <p id="loginTitle">Enter your 4-digit PIN</p>
+    <input id="pin" class="pininput" inputmode="numeric" maxlength="4" type="password" autocomplete="off" placeholder="••••">
+    <button class="loginbtn" onclick="submitPin()">Continue</button>
+    <div id="pinHint" class="loginhint"></div>
+  </div>
+</div>
+<script>
+const KEY='vvaf_v2';let db=JSON.parse(localStorage.getItem(KEY)||'null')||{customers:[],vehicles:[],finances:[],payments:[],transactions:[]};let page='home';
 const money=n=>'₹'+Number(n||0).toLocaleString('en-IN');const save=()=>localStorage.setItem(KEY,JSON.stringify(db));const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function toast(t){let x=document.getElementById('toast');x.textContent=t;x.classList.remove('hidden');setTimeout(()=>x.classList.add('hidden'),1800)}
 function stats(){let income=db.transactions.filter(x=>x.type==='income').reduce((a,x)=>a+ +x.amount,0), expense=db.transactions.filter(x=>x.type==='expense').reduce((a,x)=>a+ +x.amount,0), out=db.finances.reduce((a,f)=>a+Math.max(0,(+f.totalPayable||0)-db.payments.filter(p=>p.financeId===f.id).reduce((s,p)=>s+ +p.amount,0)),0);return {income,expense,out,active:db.finances.length}}
@@ -10,7 +32,14 @@ function home(){let s=stats();return `<div class="top"><div class="brand">Vetri 
 function recent(){let a=db.payments.slice(-5).reverse();return a.length?`<div class="list">${a.map(p=>{let f=db.finances.find(x=>x.id===p.financeId),c=f&&db.customers.find(x=>x.id===f.customerId);return `<div class="item"><div class="row"><b>${esc(c?.name||'Customer')}</b><span class="pill">PAID</span></div><div class="muted">${esc(f?.vehicleNo||'')} · ${new Date(p.date).toLocaleDateString('en-IN')}</div><div style="margin-top:5px;font-weight:800">${money(p.amount)}</div></div>`}).join('')}</div>`:'<div class="empty">இன்னும் payment இல்லை</div>'}
 function customers(){return `<div class="top"><div class="brand">Customers</div><div class="sub">Customer & RC details</div></div><div class="content"><div class="actions"><button class="action primary" onclick="openCustomer()"><b>＋</b>New Customer</button><button class="action" onclick="openFinance()"><b>₹</b>New Finance</button></div>${db.customers.length?`<div class="list">${db.customers.slice().reverse().map(c=>{let f=db.finances.find(x=>x.customerId===c.id);return `<div class="item" onclick="customerDetail('${c.id}')"><div class="row"><b>${esc(c.name)}</b><span class="pill ${f?'':'amber'}">${f?'ACTIVE':'NO FINANCE'}</span></div><div class="muted">📞 ${esc(c.mobile||'-')} · 🛵 ${esc(f?.vehicleNo||'No vehicle')}</div><div style="margin-top:7px">${f?`EMI ${money(f.emi)} · ${f.tenure} months`:'Add finance'}</div></div>`}).join('')}</div>`:'<div class="empty">Customer இல்லை.<br>New Customer-ஐ press பண்ணுங்க.</div>'}</div>${nav()}`}
 function collection(){let due=db.finances.filter(f=>!db.payments.some(p=>p.financeId===f.id&&p.installment===f.paidInstallments+1));return `<div class="top"><div class="brand">EMI Collection</div><div class="sub">Due / Pending / Payment history</div></div><div class="content"><div class="tab"><button class="sel">Today Due</button><button onclick="alert('Overdue list will use due dates in the next build.')">Overdue</button><button onclick="alert('Upcoming list will use due dates in the next build.')">Upcoming</button></div>${db.finances.length?`<div class="list">${db.finances.map(f=>{let c=db.customers.find(x=>x.id===f.customerId);let paid=db.payments.filter(p=>p.financeId===f.id).reduce((s,p)=>s+ +p.amount,0);let inst=db.payments.filter(p=>p.financeId===f.id).length;return `<div class="item"><div class="row"><b>${esc(c?.name||'')}</b><span class="pill ${inst>=f.tenure?'':'amber'}">${inst>=f.tenure?'COMPLETED':'DUE'}</span></div><div class="muted">${esc(f.vehicleNo)} · EMI #${Math.min(inst+1,f.tenure)}</div><div class="row" style="margin-top:7px"><b>${money(f.emi)}</b><button class="btn primary" style="flex:0 0 auto;padding:8px 12px" onclick="openPayment('${f.id}')">Collect</button></div></div>`}).join('')}</div>`:'<div class="empty">Finance account இல்லை.</div>'}</div>${nav()}`}
-function more(){let s=stats();return `<div class="top"><div class="brand">Reports & Accounts</div><div class="sub">Business summary</div></div><div class="content"><div class="cards"><div class="card"><div class="muted">Income</div><div class="metric green">${money(s.income)}</div></div><div class="card"><div class="muted">Expense</div><div class="metric red">${money(s.expense)}</div></div></div><div class="actions"><button class="action" onclick="openTransaction('income')"><b>＋</b>Add Income</button><button class="action" onclick="openTransaction('expense')"><b>−</b>Add Expense</button></div><div class="title">Transactions</div><div class="list">${db.transactions.slice().reverse().map(t=>`<div class="item"><div class="row"><b>${esc(t.category)}</b><span class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}${money(t.amount)}</span></div><div class="muted">${esc(t.note||'')} · ${new Date(t.date).toLocaleDateString('en-IN')}</div></div>`).join('')||'<div class="empty">Transactions இல்லை</div>'}</div></div>${nav()}`}
+function more(){let s=stats();return `<div class="top"><div class="brand">Reports & Accounts</div><div class="sub">Business summary</div></div><div class="content"><div class="cards"><div class="card"><div class="muted">Income</div><div class="metric green">${money(s.income)}</div></div><div class="card"><div class="muted">Expense</div><div class="metric red">${money(s.expense)}</div></div></div><div class="actions"><button class="action" onclick="openTransaction('income')"><b>＋</b>Add Income</button><button class="action" onclick="openTransaction('expense')"><b>−</b>Add Expense</button></div><div class="title">Transactions</div><div class="list">${db.transactions.slice().reverse().map(t=>`<div class="item"><div class="row"><b>${esc(t.category)}</b><span class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}${money(t.amount)}</span></div><div class="muted">${esc(t.note||'')} · ${new Date(t.date).toLocaleDateString('en-IN')}</div></div>`).join('')||'<div class="empty">Transactions இல்லை</div>'}</div></div>
+    <div class="title" style="margin-top:18px">Settings & Backup</div>
+    <div class="settings">
+      <button class="btn" style="width:100%;margin-bottom:8px" onclick="changePin()">🔐 Change PIN</button>
+      <button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Backup Data</button>
+      <button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button>
+      <button class="btn danger" style="width:100%" onclick="lockApp()">🔒 Lock App</button>
+    </div></div>${nav()}`}
 function go(p){page=p;render()}function render(){document.getElementById('app').innerHTML=page==='home'?home():page==='customers'?customers():page==='collection'?collection():more()}
 function openCustomer(){modal(`<h2>New Customer</h2><div class="field"><label>Name *</label><input id="c_name"></div><div class="grid2"><div class="field"><label>Mobile</label><input id="c_mobile" inputmode="tel"></div><div class="field"><label>Alternate Mobile</label><input id="c_alt"></div></div><div class="field"><label>Address</label><textarea id="c_addr"></textarea></div><div class="grid2"><div class="field"><label>Aadhaar (optional)</label><input id="c_aad"></div><div class="field"><label>PAN (optional)</label><input id="c_pan"></div></div><div class="btnrow"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveCustomer()">Save Customer</button></div>`)}
 function saveCustomer(){let name=document.getElementById('c_name').value.trim();if(!name)return toast('Name enter பண்ணுங்க');db.customers.push({id:uid('c_'),name,mobile:document.getElementById('c_mobile').value,alt:document.getElementById('c_alt').value,address:document.getElementById('c_addr').value,aadhaar:document.getElementById('c_aad').value,pan:document.getElementById('c_pan').value});save();closeModal();render();toast('Customer saved ✓')}
@@ -24,5 +53,83 @@ function customerDetail(id){let c=db.customers.find(x=>x.id===id),fs=db.finances
 function search(q){q=q.toLowerCase();if(!q)return;let c=db.customers.find(x=>[x.name,x.mobile,x.address].join(' ').toLowerCase().includes(q)),f=db.finances.find(x=>[x.vehicleNo,x.model].join(' ').toLowerCase().includes(q));if(c){page='customers';render();setTimeout(()=>customerDetail(c.id),50)}else if(f){openPayment(f.id)} }
 function modal(html){let m=document.getElementById('modal');m.innerHTML='<div class="sheet">'+html+'</div>';m.classList.remove('hidden');}function closeModal(){document.getElementById('modal').classList.add('hidden')}
 render();
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js', {scope: './'}).catch(() => {})); }
+
+// ---------- V2 PIN & BACKUP ----------
+const PIN_KEY='vvaf_pin_v2';
+let pinMode='login';
+
+async function hashPin(pin){
+  const data=new TextEncoder().encode(pin);
+  const buf=await crypto.subtle.digest('SHA-256',data);
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function showLogin(mode='login'){
+  pinMode=mode;
+  const box=document.getElementById('login');
+  const title=document.getElementById('loginTitle');
+  const hint=document.getElementById('pinHint');
+  document.getElementById('pin').value='';
+  if(mode==='setup'){
+    title.textContent='Create a 4-digit PIN';
+    hint.textContent='இந்த PIN-ஐ மறந்துவிடாதீர்கள்.';
+  }else if(mode==='change'){
+    title.textContent='Create your new 4-digit PIN';
+    hint.textContent='புதிய PIN-ஐ மட்டும் உள்ளிடுங்கள்.';
+  }else{
+    title.textContent='Enter your 4-digit PIN';
+    hint.textContent='';
+  }
+  box.classList.remove('hidden');
+  setTimeout(()=>document.getElementById('pin').focus(),100);
+}
+async function submitPin(){
+  const pin=document.getElementById('pin').value.trim();
+  if(!/^\d{4}$/.test(pin)) return toast('4-digit PIN enter பண்ணுங்க');
+  const hash=await hashPin(pin);
+  const stored=localStorage.getItem(PIN_KEY);
+  if(pinMode==='setup' || pinMode==='change'){
+    localStorage.setItem(PIN_KEY,hash);
+    document.getElementById('login').classList.add('hidden');
+    toast(pinMode==='setup'?'PIN created ✓':'PIN changed ✓');
+    return;
+  }
+  if(hash!==stored) return toast('Wrong PIN');
+  document.getElementById('login').classList.add('hidden');
+  sessionStorage.setItem('vvaf_unlocked','1');
+}
+function lockApp(){
+  sessionStorage.removeItem('vvaf_unlocked');
+  showLogin('login');
+}
+function changePin(){ showLogin('change'); }
+function backupData(){
+  const payload={version:2,exportedAt:new Date().toISOString(),data:db};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='vetri-vinayaga-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function restoreData(){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='application/json';
+  input.onchange=async()=>{
+    const file=input.files[0]; if(!file)return;
+    try{
+      const payload=JSON.parse(await file.text());
+      if(!payload.data || !Array.isArray(payload.data.customers)) throw new Error();
+      db=payload.data;
+      save(); render(); toast('Backup restored ✓');
+    }catch(e){toast('Invalid backup file');}
+  };
+  input.click();
+}
+function initV2(){
+  if(!localStorage.getItem(PIN_KEY)) showLogin('setup');
+  else if(sessionStorage.getItem('vvaf_unlocked')!=='1') showLogin('login');
+}
+
+initV2();
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {})); }
 </script></body></html>
