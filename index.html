@@ -110,9 +110,42 @@ function viewFinance(id){
  <div class="cards" style="margin-top:10px"><div class="card"><div class="muted">Paid</div><div class="metric green">${money(paidTotal)}</div></div><div class="card"><div class="muted">Outstanding</div><div class="metric blue">${money(outstanding(f))}</div></div></div>
  <div class="card" style="margin-top:10px"><div class="row"><b>EMI Progress</b><b>${paidInst.size} / ${total}</b></div><div class="progress"><i style="width:${pct}%"></i></div>${nextNo<=total?`<div class="small muted" style="margin-top:8px">Next unpaid EMI: #${nextNo}</div>`:'<div class="small green" style="margin-top:8px;font-weight:800">Finance completed ✓</div>'}</div>
  <div class="v4section">Vehicle Details</div><div class="card"><div class="muted">Year ${esc(f.year||'-')} · RC Owner ${esc(f.rcOwner||'-')}<br>Chassis ${esc(f.chassis||'-')}<br>Engine ${esc(f.engine||'-')}<br>Insurance ${esc(f.insurance||'-')} · FC ${esc(f.fcExpiry||'-')}</div></div>
- <div class="v4section">Finance Details</div><div class="card"><div class="muted">Loan Date ${esc(f.loanDate||'-')}<br>Vehicle Price ${money(f.price)} · Down ${money(f.down)}<br>Document Charge ${money(f.documentCharge)}<br>Finance Amount ${money(f.financeAmount||f.amount)}<br>Interest ${f.interest}% / month<br>Total Payable ${money(f.totalPayable)}</div></div>
+ <div class="v4section">Finance Details</div><div class="card"><div class="muted">Loan Date ${esc(f.loanDate||'-')}<br>Loan Amount ${money(f.financeAmount||f.finance||f.amount)}<br>Interest 2.50% / month<br>EMI ${money(f.emi)}<br>Tenure ${Number(f.tenure||0)} months<br>Total Payable ${money(f.totalPayable)}</div></div>
  <div class="v4section">Full EMI Schedule</div><div style="overflow:auto"><table class="schedule"><tr><th>#</th><th>Due Date</th><th>Amount</th><th>Status</th></tr>${rows}</table></div>
- <div class="btnrow">${nextNo<=total?`<button class="btn primary" onclick="closeModal();openPayment('${f.id}')">Collect EMI #${nextNo}</button>`:''}<button class="btn" onclick="closeModal();customerDetail('${f.customerId}')">Back</button></div>`)
+ <div class="btnrow">${nextNo<=total?`<button class="btn primary" onclick="closeModal();openPayment('${f.id}')">Collect EMI #${nextNo}</button>`:''}<button class="btn" onclick="openEditFinance('${f.id}')">✏️ Edit Finance</button><button class="btn" onclick="closeModal();customerDetail('${f.customerId}')">Back</button></div>`)
+}
+function openEditFinance(id){
+ let f=db.finances.find(x=>x.id===id);if(!f)return toast('Finance account இல்லை');
+ let paidInst=db.payments.filter(p=>p.financeId===id).map(p=>Number(p.installment||0));
+ let maxPaid=paidInst.length?Math.max(...paidInst):0;
+ modal(`<h2>✏️ Edit Finance</h2>
+ <div class="detailhead"><b>${esc(f.vehicleNo||'')}</b><div class="sub">${esc(db.customers.find(x=>x.id===f.customerId)?.name||'Customer')}</div></div>
+ <div class="field"><label>Loan Amount</label><input id="ef_loan" type="number" min="0" step="1" value="${Number(f.financeAmount||f.finance||f.amount||0)}" oninput="calcEditFinance()"></div>
+ <div class="field"><label>Interest % / Month</label><input id="ef_int" type="number" value="2.5" readonly></div>
+ <div class="field"><label>Tenure (Months)</label><input id="ef_ten" type="number" min="${Math.max(1,maxPaid)}" value="${Number(f.tenure||1)}" oninput="calcEditFinance()"></div>
+ <div class="field"><label>Loan Date</label><input id="ef_date" type="date" value="${esc(f.loanDate||today())}" oninput="calcEditFinance()"></div>
+ <div id="ef_summary" class="summary"></div>
+ <div class="notice" style="margin-top:12px">Already collected EMI-கள் பாதுகாப்பாக இருக்கும். Paid EMI count-க்கு குறைவான tenure-ஐ set செய்ய முடியாது.</div>
+ <div class="btnrow"><button class="btn" onclick="viewFinance('${id}')">Cancel</button><button class="btn primary" onclick="saveEditedFinance('${id}')">Save Changes</button></div>`);
+ calcEditFinance();
+}
+function editFinanceData(){
+ let loan=+document.getElementById('ef_loan').value||0,ten=Math.max(1,parseInt(document.getElementById('ef_ten').value||1)),date=document.getElementById('ef_date').value||today(),interest=2.5,mi=loan*interest/100,raw=loan/ten+mi,emi=Math.round(raw/10)*10,total=emi*ten;return{loan,ten,date,interest,mi,raw,emi,total};
+}
+function calcEditFinance(){
+ let c=editFinanceData(),rows='';
+ for(let i=1;i<=c.ten;i++)rows+=`<tr><td>${i}</td><td>${addMonths(c.date,i)}</td><td>${money(c.emi)}</td></tr>`;
+ document.getElementById('ef_summary').innerHTML=`<b>Loan Amount:</b> ${money(c.loan)} &nbsp; <b>Interest:</b> 2.50% / month<br><b>Monthly Interest:</b> ${money(c.mi)}<br><b>EMI:</b> ${money(c.emi)} &nbsp; <b>Total Payable:</b> ${money(c.total)}<div style="margin-top:10px;overflow:auto"><table class="schedule"><tr><th>EMI</th><th>Due Date</th><th>Amount</th></tr>${rows}</table></div>`;
+}
+function saveEditedFinance(id){
+ let f=db.finances.find(x=>x.id===id);if(!f)return toast('Finance account இல்லை');
+ let pays=db.payments.filter(p=>p.financeId===id),maxPaid=pays.length?Math.max(...pays.map(p=>Number(p.installment||0))):0,c=editFinanceData();
+ if(!c.loan)return toast('Loan Amount enter பண்ணுங்க');
+ if(c.ten<maxPaid)return toast(`Paid EMI #${maxPaid} வரை இருக்கு. Tenure ${maxPaid} அல்லது அதற்கு மேல் வைக்கவும்`);
+ let schedule=[];
+ for(let i=1;i<=c.ten;i++)schedule.push({no:i,dueDate:addMonths(c.date,i),amount:c.emi,status:pays.some(p=>Number(p.installment||0)===i)?'Paid':'Pending',paidDate:null});
+ f.loanDate=c.date;f.price=c.loan;f.down=0;f.docPct=0;f.documentCharge=0;f.interest=2.5;f.tenure=c.ten;f.financeAmount=c.loan;f.finance=c.loan;f.amount=c.loan;f.monthlyInterest=c.mi;f.emi=c.emi;f.totalPayable=c.total;f.schedule=schedule;f.outstanding=Math.max(0,c.total-paidFor(f));
+ save();viewFinance(id);toast('Finance updated ✓');
 }
 function search(q){q=q.trim().toLowerCase();if(!q)return;let c=db.customers.find(x=>[x.name,x.mobile,x.alt,x.address].join(' ').toLowerCase().includes(q)),f=db.finances.find(x=>[x.vehicleNo,x.model,x.rcOwner,x.engine,x.chassis].join(' ').toLowerCase().includes(q));if(c){page='customers';render();setTimeout(()=>customerDetail(c.id),50)}else if(f){viewFinance(f.id)}}
 function modal(html){let m=document.getElementById('modal');m.innerHTML='<div class="sheet">'+html+'</div>';m.classList.remove('hidden')}function closeModal(){document.getElementById('modal').classList.add('hidden')}
