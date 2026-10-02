@@ -44,7 +44,7 @@ body{background:linear-gradient(180deg,#f7f9fc 0%,#eef3f9 100%);color:var(--ink)
 #app>.top+ .content{min-height:calc(100vh - 150px)}
 .v4section{color:#132642}.photoBox{border-color:#cfd8e5;background:#f8fafc}.schedule th{background:#f3f6fa;color:#41516a}.schedule td{background:#fff}
 @media(max-width:420px){.top{padding:22px 17px 21px}.brand{font-size:24px}.content{padding:18px 14px 24px}.card,.item{border-radius:19px}.action{padding:18px 15px}}
-</style><meta name="app-version" content="V62"><meta name="sw-cache" content="vvaf-v62"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
+</style><meta name="app-version" content="V63"><meta name="sw-cache" content="vvaf-v63"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
 const KEY='vvaf_v2';
 const SECURE_KEY='vvaf_secure_db_v1';
 let db={customers:[],vehicles:[],finances:[],payments:[],cizings:[],transactions:[]};
@@ -52,6 +52,11 @@ let secureCryptoKey=null;
 let secureSalt=null;
 let secureReady=false;
 let legacyDb=null;
+const SECURITY_VERSION=2;
+const FAIL_KEY='vvaf_pin_fail_v1';
+const LOCKOUT_KEY='vvaf_pin_lockout_v1';
+const AUTOLOCK_MS=10*60*1000;
+let autoLockTimer=null;
 function normalizeDb(x){x=x||{};return {customers:Array.isArray(x.customers)?x.customers:[],vehicles:Array.isArray(x.vehicles)?x.vehicles:[],finances:Array.isArray(x.finances)?x.finances:[],payments:Array.isArray(x.payments)?x.payments:[],cizings:Array.isArray(x.cizings)?x.cizings:[],transactions:Array.isArray(x.transactions)?x.transactions:[]}}
 try{legacyDb=normalizeDb(JSON.parse(localStorage.getItem(KEY)||'null'));}catch(e){legacyDb=normalizeDb(null)}
 function b64(bytes){let s='';bytes.forEach(b=>s+=String.fromCharCode(b));return btoa(s)}
@@ -279,9 +284,29 @@ function saveEditedFinance(id){
 }
 function search(q){q=q.trim().toLowerCase();if(!q)return;let c=db.customers.find(x=>[x.name,x.mobile,x.alt,x.address].join(' ').toLowerCase().includes(q)),f=db.finances.find(x=>[x.vehicleNo,x.model,x.rcOwner,x.engine,x.chassis].join(' ').toLowerCase().includes(q));if(c){page='customers';render();setTimeout(()=>customerDetail(c.id),50)}else if(f){viewFinance(f.id)}}
 function modal(html){let m=document.getElementById('modal');m.innerHTML='<div class="sheet">'+html+'</div>';m.classList.remove('hidden')}function closeModal(){document.getElementById('modal').classList.add('hidden')}
-function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V61: App data is encrypted on this device. Keep your PIN private.</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Backup Data</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
-function backupData(){let blob=new Blob([JSON.stringify({version:4,exportedAt:new Date().toISOString(),data:db},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vetri-vinayaga-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Backup downloaded ✓')}
-function restoreData(){let i=document.createElement('input');i.type='file';i.accept='application/json';i.onchange=async()=>{try{let p=JSON.parse(await i.files[0].text());if(!p.data||!Array.isArray(p.data.customers))throw 0;db=p.data;db.customers=db.customers||[];db.finances=db.finances||[];db.payments=db.payments||[];db.cizings=db.cizings||[];db.transactions=db.transactions||[];save();closeModal();render();toast('Backup restored ✓')}catch(e){toast('Invalid backup file')}};i.click()}
+function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V63 Security: local data encrypted with AES-GCM. New backups are also PIN-encrypted. App auto-locks after 10 minutes of inactivity.</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
+async function backupData(){
+ if(!secureReady)return toast('Unlock app first');
+ try{
+  let blob=await encryptDb(db,secureCryptoKey,secureSalt);
+  let payload={version:5,type:'vvaf-encrypted-backup',exportedAt:new Date().toISOString(),security:'AES-GCM-256 + PIN-derived key',crypto:blob};
+  let file=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(file);a.download='vetri-vinayaga-secure-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Secure encrypted backup downloaded ✓');
+ }catch(e){toast('Secure backup failed')}
+}
+function restoreData(){let i=document.createElement('input');i.type='file';i.accept='application/json';i.onchange=async()=>{try{
+  let p=JSON.parse(await i.files[0].text());
+  if(p&&p.type==='vvaf-encrypted-backup'&&p.crypto){
+   let pin=prompt('Enter backup PIN');if(pin===null)return;
+   if(!/^\d{4}$/.test(pin))return toast('4 digit PIN enter பண்ணுங்க');
+   let r=await decryptSecure(p.crypto,pin);db=r.db;save();closeModal();render();toast('Encrypted backup restored ✓');return;
+  }
+  if(p&&p.data&&Array.isArray(p.data.customers)){
+   if(!confirm('This is an old unencrypted backup. Restore it?'))return;
+   db=normalizeDb(p.data);save();closeModal();render();toast('Legacy backup restored ✓');return;
+  }
+  throw 0;
+ }catch(e){toast('Invalid backup or wrong PIN')}};i.click()}
 function changePinSafe(){if(typeof changePin==='function')changePin();else toast('PIN function unavailable')}function lockAppSafe(){if(typeof lockApp==='function')lockApp();else toast('Lock function unavailable')}
 render();
 </script>
@@ -289,8 +314,7 @@ render();
 // Keep existing V2 PIN implementation from V3 build when available; fallback setup/login.
 const PIN_KEY='vvaf_pin_hash_v2';
 async function hashPin(pin){const b=new TextEncoder().encode(pin),h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')}
-function showLogin(mode='login'){let title=mode==='setup'?'Set 4-digit PIN':'Enter PIN';let box=document.createElement('div');box.id='pinOverlay';box.className='pinProOverlay';box.innerHTML=`<div class="pinProBg"></div><div class="pinProGlow pinProGlow1"></div><div class="pinProGlow pinProGlow2"></div><div class="pinProWrap"><div class="pinBrandTop"><div class="pinLogoRing"><img src="./office-logo.png" alt="Vetri Vinayaga Auto Finance"></div><div class="pinBrandName">VETRI VINAYAGA</div><div class="pinBrandSub">AUTO FINANCE</div><div class="pinBrandTag">நம்பிக்கை & வளர்ச்சி &nbsp;|&nbsp; TRUST & GROWTH</div></div><div class="pinCard"><div class="pinLock">🔒</div><div class="pinTitle">${title}</div><div class="pinHint">Secure access to your account</div><input id="pinInput" class="pinInputPro" inputmode="numeric" maxlength="4" type="password" placeholder="••••" autocomplete="off"><button id="pinBtn" class="pinBtnPro">Continue <span>→</span></button></div><div class="pinFooter">Vetri Vinayaga Auto Finance · ESTD. 2020</div></div>`;document.body.appendChild(box);document.getElementById('pinBtn').onclick=()=>submitPin(mode);setTimeout(()=>document.getElementById('pinInput')?.focus(),120)}async function submitPin(mode){let v=document.getElementById('pinInput').value;if(!/^\d{4}$/.test(v))return toast('4 digit PIN enter பண்ணுங்க');let h=await hashPin(v);if(mode==='setup'){try{localStorage.setItem(PIN_KEY,h);let ok=await unlockSecure(v,'setup');if(!ok)throw new Error('setup');repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();toast('Secure data enabled ✓')}catch(e){localStorage.removeItem(PIN_KEY);return toast('Secure setup failed')}}if(mode==='login'){try{let ok=await unlockSecure(v,'login');if(!ok)throw new Error('unlock');localStorage.setItem(PIN_KEY,h);repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();}catch(e){return toast('Wrong PIN or secure data error')}}if(mode==='change'){toast('Use Change PIN from Settings')}}
-async function changePin(){let old=prompt('Current PIN');if(old===null)return;let h=await hashPin(old);if(h!==localStorage.getItem(PIN_KEY))return toast('Wrong current PIN');let n=prompt('New 4-digit PIN');if(!n||!/^[0-9]{4}$/.test(n))return toast('Invalid new PIN');try{let h2=await hashPin(n),blob=await encryptDb(db,n);localStorage.setItem(PIN_KEY,h2);localStorage.setItem(SECURE_KEY,JSON.stringify(blob));secureSalt=unb64(blob.salt);secureCryptoKey=await deriveSecureKey(n,secureSalt);toast('PIN changed & data re-encrypted ✓')}catch(e){toast('PIN change failed')}}
-function lockApp(){sessionStorage.removeItem('vvaf_unlocked');location.reload()}
-if(!localStorage.getItem(PIN_KEY))showLogin('setup');else if(sessionStorage.getItem('vvaf_unlocked')!=='1')showLogin('login');
-</script><script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}));</script></body></html>
+function showLogin(mode='login'){let title=mode==='setup'?'Set 4-digit PIN':'Enter PIN';let box=document.createElement('div');box.id='pinOverlay';box.className='pinProOverlay';box.innerHTML=`<div class="pinProBg"></div><div class="pinProGlow pinProGlow1"></div><div class="pinProGlow pinProGlow2"></div><div class="pinProWrap"><div class="pinBrandTop"><div class="pinLogoRing"><img src="./office-logo.png" alt="Vetri Vinayaga Auto Finance"></div><div class="pinBrandName">VETRI VINAYAGA</div><div class="pinBrandSub">AUTO FINANCE</div><div class="pinBrandTag">நம்பிக்கை & வளர்ச்சி &nbsp;|&nbsp; TRUST & GROWTH</div></div><div class="pinCard"><div class="pinLock">🔒</div><div class="pinTitle">${title}</div><div class="pinHint">Secure access to your account</div><input id="pinInput" class="pinInputPro" inputmode="numeric" maxlength="4" type="password" placeholder="••••" autocomplete="off"><button id="pinBtn" class="pinBtnPro">Continue <span>→</span></button></div><div class="pinFooter">Vetri Vinayaga Auto Finance · ESTD. 2020</div></div>`;document.body.appendChild(box);document.getElementById('pinBtn').onclick=()=>submitPin(mode);setTimeout(()=>document.getElementById('pinInput')?.focus(),120)}async function submitPin(mode){let v=document.getElementById('pinInput').value;if(!/^\d{4}$/.test(v))return toast('4 digit PIN enter பண்ணுங்க');if(mode==='login'){let until=getLockout();if(until&&until>Date.now())return toast('Too many attempts. 30 sec wait பண்ணுங்க')}let h=await hashPin(v);if(mode==='setup'){try{localStorage.setItem(PIN_KEY,h);let ok=await unlockSecure(v,'setup');if(!ok)throw new Error('setup');repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();toast('Secure data enabled ✓')}catch(e){localStorage.removeItem(PIN_KEY);return toast('Secure setup failed')}}if(mode==='login'){try{let ok=await unlockSecure(v,'login');if(!ok)throw new Error('unlock');localStorage.setItem(PIN_KEY,h);sessionStorage.setItem('vvaf_unlocked','1');sessionStorage.setItem(FAIL_KEY,'0');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();}catch(e){let until=registerPinFailure();return toast(until?'Too many wrong PINs. 30 sec lockout':'Wrong PIN')}}if(mode==='change'){toast('Use Change PIN from Settings')}}
+
+if(!localStorage.getItem(PIN_KEY))showLogin('setup');else if(sessionStorage.getItem('vvaf_unlocked')!=='1')showLogin('login');else scheduleAutoLock();
+</script><script>['click','touchstart','keydown','input'].forEach(e=>document.addEventListener(e,securityActivity,{passive:true}));if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}));</script></body></html>
