@@ -44,7 +44,7 @@ body{background:linear-gradient(180deg,#f7f9fc 0%,#eef3f9 100%);color:var(--ink)
 #app>.top+ .content{min-height:calc(100vh - 150px)}
 .v4section{color:#132642}.photoBox{border-color:#cfd8e5;background:#f8fafc}.schedule th{background:#f3f6fa;color:#41516a}.schedule td{background:#fff}
 @media(max-width:420px){.top{padding:22px 17px 21px}.brand{font-size:24px}.content{padding:18px 14px 24px}.card,.item{border-radius:19px}.action{padding:18px 15px}}
-</style><meta name="app-version" content="V67"><meta name="sw-cache" content="vvaf-v67"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
+</style><meta name="app-version" content="V68"><meta name="sw-cache" content="vvaf-v68"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
 const KEY='vvaf_v2';
 const SECURE_KEY='vvaf_secure_db_v1';
 let db={customers:[],vehicles:[],finances:[],payments:[],cizings:[],transactions:[]};
@@ -284,7 +284,7 @@ function saveEditedFinance(id){
 }
 function search(q){q=q.trim().toLowerCase();if(!q)return;let c=db.customers.find(x=>[x.name,x.mobile,x.alt,x.address].join(' ').toLowerCase().includes(q)),f=db.finances.find(x=>[x.vehicleNo,x.model,x.rcOwner,x.engine,x.chassis].join(' ').toLowerCase().includes(q));if(c){page='customers';render();setTimeout(()=>customerDetail(c.id),50)}else if(f){viewFinance(f.id)}}
 function modal(html){let m=document.getElementById('modal');m.innerHTML='<div class="sheet">'+html+'</div>';m.classList.remove('hidden')}function closeModal(){document.getElementById('modal').classList.add('hidden')}
-function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V63 Security: local data encrypted with AES-GCM. New backups are also PIN-encrypted. App auto-locks after 10 minutes of inactivity.</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
+function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V68 Security: local data encrypted with AES-GCM. Backups are PIN-encrypted. PIN changes re-encrypt the database with the new PIN. App auto-locks after 10 minutes.</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
 async function backupData(){
  if(!secureReady)return toast('Unlock app first');
  try{
@@ -307,7 +307,38 @@ function restoreData(){let i=document.createElement('input');i.type='file';i.acc
   }
   throw 0;
  }catch(e){toast('Invalid backup or wrong PIN')}};i.click()}
-function changePinSafe(){if(typeof changePin==='function')changePin();else toast('PIN function unavailable')}function lockAppSafe(){if(typeof lockApp==='function')lockApp();else toast('Lock function unavailable')}
+async function changePin(){
+ if(!secureReady)return toast('Unlock app first');
+ let current=prompt('Enter current 4-digit PIN');
+ if(current===null)return;
+ if(!/^\d{4}$/.test(current))return toast('4 digit current PIN enter பண்ணுங்க');
+ try{
+  await decryptSecure(JSON.parse(localStorage.getItem(SECURE_KEY)||'null'),current);
+ }catch(e){return toast('Current PIN wrong')}
+
+ let next=prompt('Enter new 4-digit PIN');
+ if(next===null)return;
+ if(!/^\d{4}$/.test(next))return toast('4 digit new PIN enter பண்ணுங்க');
+ let confirmPin=prompt('Re-enter new 4-digit PIN');
+ if(confirmPin===null)return;
+ if(next!==confirmPin)return toast('New PIN match ஆகவில்லை');
+ if(next===current)return toast('New PIN, old PIN-ஐ விட வேறாக இருக்கணும்');
+
+ try{
+  let newBlob=await encryptDb(db,next);
+  localStorage.setItem(SECURE_KEY,JSON.stringify(newBlob));
+  localStorage.setItem(PIN_KEY,await hashPin(next));
+  secureSalt=unb64(newBlob.salt);
+  secureCryptoKey=await deriveSecureKey(next,secureSalt);
+  secureReady=true;
+  sessionStorage.setItem('vvaf_secure_session','1');
+  sessionStorage.setItem(FAIL_KEY,'0');
+  toast('PIN changed & data re-encrypted ✓');
+ }catch(e){
+  return toast('PIN change failed — old PIN remains');
+ }
+}
+function changePinSafe(){changePin().catch(()=>toast('PIN change failed'))}function lockAppSafe(){if(typeof lockApp==='function')lockApp();else toast('Lock function unavailable')}
 render();
 </script>
 <div id="pinArea"></div><script>
