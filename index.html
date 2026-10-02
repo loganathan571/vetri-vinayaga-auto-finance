@@ -45,16 +45,20 @@ body{background:linear-gradient(180deg,#f7f9fc 0%,#eef3f9 100%);color:var(--ink)
 .v4section{color:#132642}.photoBox{border-color:#cfd8e5;background:#f8fafc}.schedule th{background:#f3f6fa;color:#41516a}.schedule td{background:#fff}
 @media(max-width:420px){.top{padding:22px 17px 21px}.brand{font-size:24px}.content{padding:18px 14px 24px}.card,.item{border-radius:19px}.action{padding:18px 15px}}
 
-/* V69 Strong Device Security */
-.v69security{background:#f5f9ff;border:1px solid #cfe0f8;border-radius:16px;padding:13px;margin:10px 0;color:#17375f;font-size:13px;line-height:1.55}.v69bioBtn{width:100%;margin-bottom:8px}.v69privacy{position:fixed;inset:0;background:#07101f;color:#fff;z-index:1000;display:none;align-items:center;justify-content:center;text-align:center;padding:28px;font-weight:800}.v69privacy.show{display:flex}.v69privacy .box{max-width:360px}.v69privacy .lock{font-size:52px;margin-bottom:14px}
-</style><meta name="app-version" content="V69"><meta name="sw-cache" content="vvaf-v69"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><div id="v69Privacy" class="v69privacy"><div class="box"><div class="lock">🔒</div><div>App protected</div><div style="opacity:.65;margin-top:8px;font-size:13px">Screen content is hidden while the app is not visible.</div></div></div><script>
+/* V70 Strong Device Security */
+.v70security{background:#f5f9ff;border:1px solid #cfe0f8;border-radius:16px;padding:13px;margin:10px 0;color:#17375f;font-size:13px;line-height:1.55}.v70bioBtn{width:100%;margin-bottom:8px}.v69privacy{position:fixed;inset:0;background:#07101f;color:#fff;z-index:1000;display:none;align-items:center;justify-content:center;text-align:center;padding:28px;font-weight:800}.v69privacy.show{display:flex}.v69privacy .box{max-width:360px}.v69privacy .lock{font-size:52px;margin-bottom:14px}
+</style><meta name="app-version" content="V70"><meta name="sw-cache" content="vvaf-v70"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><div id="v70Privacy" class="v69privacy"><div class="box"><div class="lock">🔒</div><div>App protected</div><div style="opacity:.65;margin-top:8px;font-size:13px">Screen content is hidden while the app is not visible.</div></div></div><script>
 const KEY='vvaf_v2';
 const SECURE_KEY='vvaf_secure_db_v1';
 let db={customers:[],vehicles:[],finances:[],payments:[],cizings:[],transactions:[]};
 let secureCryptoKey=null;
 let secureSalt=null;
 let secureReady=false;
+let pinCryptoKey=null;
+let biometricCryptoKey=null;
 let legacyDb=null;
+const BIOMETRIC_META_KEY='vvaf_biometric_meta_v2';
+const BIOMETRIC_BLOB_KEY='vvaf_biometric_blob_v2';
 const SECURITY_VERSION=2;
 const FAIL_KEY='vvaf_pin_fail_v1';
 const LOCKOUT_KEY='vvaf_pin_lockout_v1';
@@ -66,11 +70,13 @@ function b64(bytes){let s='';bytes.forEach(b=>s+=String.fromCharCode(b));return 
 function unb64(s){let bin=atob(s),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
 async function deriveSecureKey(pin,salt){let base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function encryptDb(data,pinOrKey,saltInput){let salt=saltInput||crypto.getRandomValues(new Uint8Array(16)),key=typeof pinOrKey==='string'?await deriveSecureKey(pinOrKey,salt):pinOrKey,iv=crypto.getRandomValues(new Uint8Array(12)),plain=new TextEncoder().encode(JSON.stringify(data)),cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);return {version:1,salt:b64(salt),iv:b64(iv),data:b64(new Uint8Array(cipher))}}
-async function decryptSecure(blob,pin){let salt=unb64(blob.salt),key=await deriveSecureKey(pin,salt),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},key,unb64(blob.data));return {db:normalizeDb(JSON.parse(new TextDecoder().decode(plain))),key}}
-async function unlockSecure(pin,mode){let raw=localStorage.getItem(SECURE_KEY);if(raw){let blob;try{blob=JSON.parse(raw)}catch(e){throw new Error('invalid')};let r=await decryptSecure(blob,pin);db=r.db;secureSalt=unb64(blob.salt);secureCryptoKey=r.key;secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');return true}
-if((mode==='setup'||mode==='login')&&legacyDb){db=legacyDb;let blob=await encryptDb(db,pin);secureSalt=unb64(blob.salt);secureCryptoKey=await deriveSecureKey(pin,secureSalt);localStorage.setItem(SECURE_KEY,JSON.stringify(blob));localStorage.removeItem(KEY);secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');return true}
+async function decryptWithKey(blob,key){let plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},key,unb64(blob.data));return normalizeDb(JSON.parse(new TextDecoder().decode(plain)))}
+async function decryptSecure(blob,pin){let salt=unb64(blob.salt),key=await deriveSecureKey(pin,salt),out=await decryptWithKey(blob,key);return {db:out,key}}
+async function deriveBiometricKey(prfOutput,salt){let base=await crypto.subtle.importKey('raw',prfOutput,'HKDF',false,['deriveKey']);return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:new TextEncoder().encode('VVAF-BIOMETRIC-V2')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function unlockSecure(pin,mode){let raw=localStorage.getItem(SECURE_KEY);if(raw){let blob;try{blob=JSON.parse(raw)}catch(e){throw new Error('invalid')};let r=await decryptSecure(blob,pin);db=r.db;secureSalt=unb64(blob.salt);secureCryptoKey=r.key;pinCryptoKey=r.key;biometricCryptoKey=null;secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');return true}
+if((mode==='setup'||mode==='login')&&legacyDb){db=legacyDb;let blob=await encryptDb(db,pin);secureSalt=unb64(blob.salt);secureCryptoKey=await deriveSecureKey(pin,secureSalt);pinCryptoKey=secureCryptoKey;biometricCryptoKey=null;localStorage.setItem(SECURE_KEY,JSON.stringify(blob));localStorage.removeItem(KEY);secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');return true}
 return false}
-async function secureSave(){if(!secureReady||!secureCryptoKey)return;let blob=await encryptDb(db,secureCryptoKey,secureSalt);localStorage.setItem(SECURE_KEY,JSON.stringify(blob));localStorage.removeItem(KEY)}
+async function secureSave(){if(!secureReady)return;try{if(pinCryptoKey){let blob=await encryptDb(db,pinCryptoKey,secureSalt);localStorage.setItem(SECURE_KEY,JSON.stringify(blob))}if(biometricCryptoKey&&localStorage.getItem(BIOMETRIC_META_KEY)){let meta=JSON.parse(localStorage.getItem(BIOMETRIC_META_KEY));let salt=unb64(meta.prfSalt);let blob=await encryptDb(db,biometricCryptoKey,salt);localStorage.setItem(BIOMETRIC_BLOB_KEY,JSON.stringify(blob))}localStorage.removeItem(KEY)}catch(e){}}
 
 function repairSchedules(){db.finances.forEach(f=>{if(!Array.isArray(f.schedule)||f.schedule.length!==Number(f.tenure||0)||f.schedule.some((x,i)=>!x||!/^\d{4}-\d{2}-\d{2}$/.test(String(x.dueDate||'')))){let ps=db.payments.filter(p=>p.financeId===f.id).sort((a,b)=>new Date(a.date)-new Date(b.date));let first=ps.find(p=>Number(p.installment||0)===1)||ps[0];let base=f.loanDate|| (first&&first.date?String(first.date).slice(0,10):'');if(base&&f.tenure){f.schedule=[];for(let i=1;i<=Number(f.tenure);i++)f.schedule.push({no:i,dueDate:addMonths(base,i),amount:Number(f.emi||0),status:'Pending',paidDate:null});}}});save()}
 
@@ -287,11 +293,11 @@ function saveEditedFinance(id){
 }
 function search(q){q=q.trim().toLowerCase();if(!q)return;let c=db.customers.find(x=>[x.name,x.mobile,x.alt,x.address].join(' ').toLowerCase().includes(q)),f=db.finances.find(x=>[x.vehicleNo,x.model,x.rcOwner,x.engine,x.chassis].join(' ').toLowerCase().includes(q));if(c){page='customers';render();setTimeout(()=>customerDetail(c.id),50)}else if(f){viewFinance(f.id)}}
 function modal(html){let m=document.getElementById('modal');m.innerHTML='<div class="sheet">'+html+'</div>';m.classList.remove('hidden')}function closeModal(){document.getElementById('modal').classList.add('hidden')}
-function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V69 Security: AES-GCM local encryption + PIN. Device biometric unlock is available on supported Android browsers. Auto-lock after 10 minutes.</div><div class="v69security"><b>📱 Device Security</b><br>Fingerprint/biometric uses the phone's platform authenticator when supported. This is an additional device-authentication layer; browser PWAs cannot directly control the Android Keystore encryption API.</div><button class="btn v69bioBtn" onclick="registerBiometric()">🆔 Enable Fingerprint / Device Unlock</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
+function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V70 Security: AES-GCM local encryption + PIN + device biometric unlock when supported. Auto-lock after 10 minutes.</div><div class="v70security"><b>📱 Device Security</b><br>Fingerprint/biometric uses the phone's platform authenticator and a WebAuthn PRF-derived encryption key when supported. PIN remains the fallback.</div><button class="btn v70bioBtn" onclick="registerBiometric()">🆔 Enable Fingerprint / Device Unlock</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
 async function backupData(){
- if(!secureReady)return toast('Unlock app first');
+ if(!secureReady||!pinCryptoKey)return toast('PIN unlock required for backup');
  try{
-  let blob=await encryptDb(db,secureCryptoKey,secureSalt);
+  let blob=await encryptDb(db,pinCryptoKey,secureSalt);
   let payload={version:5,type:'vvaf-encrypted-backup',exportedAt:new Date().toISOString(),security:'AES-GCM-256 + PIN-derived key',crypto:blob};
   let file=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
   a.href=URL.createObjectURL(file);a.download='vetri-vinayaga-secure-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Secure encrypted backup downloaded ✓');
@@ -314,10 +320,35 @@ async function v69RandomChallenge(){return crypto.getRandomValues(new Uint8Array
 function v69B64Url(bytes){let s='';bytes.forEach(b=>s+=String.fromCharCode(b));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function v69UnB64Url(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';let b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
 function biometricSupported(){return !!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create&&navigator.credentials.get)}
-function biometricCredentialId(){return localStorage.getItem('vvaf_biometric_cred_v1')||''}
-async function registerBiometric(){if(!secureReady)return toast('Unlock app first');if(!biometricSupported())return toast('Fingerprint/biometric not supported');try{if(PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable){let ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();if(!ok)return toast('Phone biometric unavailable')}let challenge=await v69RandomChallenge(),uid=crypto.getRandomValues(new Uint8Array(16));let cred=await navigator.credentials.create({publicKey:{challenge,rp:{name:'Vetri Vinayaga Auto Finance'},user:{id:uid,name:'vetri-vinayaga',displayName:'Vetri Vinayaga Auto Finance'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',residentKey:'required',requireResidentKey:true,userVerification:'required'},timeout:60000,attestation:'none'}});if(!cred)return;localStorage.setItem('vvaf_biometric_cred_v1',v69B64Url(new Uint8Array(cred.rawId)));localStorage.setItem('vvaf_biometric_enabled_v1','1');toast('Fingerprint / device unlock enabled ✓')}catch(e){toast('Biometric setup cancelled or unavailable')}}
-async function biometricUnlock(){if(!biometricCredentialId()||!biometricSupported())return false;try{let challenge=await v69RandomChallenge(),id=v69UnB64Url(biometricCredentialId());let a=await navigator.credentials.get({publicKey:{challenge,allowCredentials:[{id,type:'public-key'}],userVerification:'required',timeout:60000}});if(!a)return false;sessionStorage.setItem('vvaf_biometric_verified','1');return true}catch(e){return false}}
-function v69AddBiometricButton(){let card=document.querySelector('.pinCard');if(!card||document.getElementById('v69BioLogin')||!biometricCredentialId())return;let b=document.createElement('button');b.id='v69BioLogin';b.className='pinBtnPro';b.style.marginTop='10px';b.textContent='👆 Unlock with Fingerprint';b.onclick=async()=>{let ok=await biometricUnlock();if(!ok)return toast('Biometric verification failed');toast('Fingerprint verified ✓ Enter PIN to decrypt data')};card.appendChild(b)}
+function biometricMeta(){try{return JSON.parse(localStorage.getItem(BIOMETRIC_META_KEY)||'null')}catch(e){return null}}
+function biometricCredentialId(){return biometricMeta()?.credId||''}
+async function registerBiometric(){
+ if(!secureReady)return toast('Unlock app first');
+ if(!biometricSupported())return toast('Fingerprint/biometric not supported');
+ try{
+  if(PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable){let ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();if(!ok)return toast('Phone biometric unavailable')}
+  let challenge=await v69RandomChallenge(),uid=crypto.getRandomValues(new Uint8Array(16)),prfSalt=crypto.getRandomValues(new Uint8Array(32));
+  let cred=await navigator.credentials.create({publicKey:{challenge,rp:{name:'Vetri Vinayaga Auto Finance'},user:{id:uid,name:'vetri-vinayaga',displayName:'Vetri Vinayaga Auto Finance'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',residentKey:'required',requireResidentKey:true,userVerification:'required'},extensions:{prf:{eval:{first:prfSalt}}},timeout:60000,attestation:'none'}});
+  if(!cred)return;
+  let ext=cred.getClientExtensionResults?.()||{},out=ext.prf?.results?.first;
+  if(!out){return toast('இந்த phone/browser biometric PRF support இல்லை. PIN fallback available')}
+  let bioKey=await deriveBiometricKey(new Uint8Array(out),prfSalt),blob=await encryptDb(db,bioKey,prfSalt);
+  localStorage.setItem(BIOMETRIC_META_KEY,JSON.stringify({version:2,credId:v69B64Url(new Uint8Array(cred.rawId)),prfSalt:b64(prfSalt)}));
+  localStorage.setItem(BIOMETRIC_BLOB_KEY,JSON.stringify(blob));
+  localStorage.setItem('vvaf_biometric_enabled_v1','1');
+  toast('Fingerprint unlock enabled ✓')
+ }catch(e){toast('Biometric setup cancelled or unavailable')}
+}
+async function biometricUnlock(){
+ let meta=biometricMeta();if(!meta||!meta.credId||!meta.prfSalt||!biometricSupported())return false;
+ try{
+  let challenge=await v69RandomChallenge(),id=v69UnB64Url(meta.credId),salt=unb64(meta.prfSalt),blob=JSON.parse(localStorage.getItem(BIOMETRIC_BLOB_KEY)||'null');if(!blob)return false;
+  let a=await navigator.credentials.get({publicKey:{challenge,allowCredentials:[{id,type:'public-key'}],userVerification:'required',timeout:60000,rpId:location.hostname,extensions:{prf:{evalByCredential:{[meta.credId]:{first:salt}}}}}});
+  let out=a?.getClientExtensionResults?.()?.prf?.results?.first;if(!out)return false;
+  let key=await deriveBiometricKey(new Uint8Array(out),salt),plain=await decryptWithKey(blob,key);db=plain;biometricCryptoKey=key;pinCryptoKey=null;secureCryptoKey=null;secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');sessionStorage.setItem('vvaf_biometric_verified','1');sessionStorage.setItem('vvaf_unlocked','1');return true
+ }catch(e){return false}
+}
+function v69AddBiometricButton(){let card=document.querySelector('.pinCard');if(!card||document.getElementById('v70BioLogin')||!biometricCredentialId()||!localStorage.getItem(BIOMETRIC_BLOB_KEY))return;let b=document.createElement('button');b.id='v70BioLogin';b.className='pinBtnPro';b.style.marginTop='10px';b.textContent='👆 Unlock with Fingerprint';b.onclick=async()=>{let ok=await biometricUnlock();if(!ok)return toast('Biometric verification failed');clearTimeout(autoLockTimer);document.getElementById('pinOverlay')?.remove();render();scheduleAutoLock();toast('Fingerprint unlock successful ✓')};card.appendChild(b)}
 async function changePin(){
  if(!secureReady)return toast('Unlock app first');
  let current=prompt('Enter current 4-digit PIN');
@@ -336,18 +367,13 @@ async function changePin(){
  if(next===current)return toast('New PIN, old PIN-ஐ விட வேறாக இருக்கணும்');
 
  try{
-  let newBlob=await encryptDb(db,next);
+  let newBlob=await encryptDb(db,next),newPinKey=await deriveSecureKey(next,unb64(newBlob.salt));
   localStorage.setItem(SECURE_KEY,JSON.stringify(newBlob));
   localStorage.setItem(PIN_KEY,await hashPin(next));
-  secureSalt=unb64(newBlob.salt);
-  secureCryptoKey=await deriveSecureKey(next,secureSalt);
-  secureReady=true;
-  sessionStorage.setItem('vvaf_secure_session','1');
-  sessionStorage.setItem(FAIL_KEY,'0');
-  toast('PIN changed & data re-encrypted ✓');
- }catch(e){
-  return toast('PIN change failed — old PIN remains');
- }
+  secureSalt=unb64(newBlob.salt);secureCryptoKey=newPinKey;pinCryptoKey=newPinKey;
+  if(biometricCryptoKey&&biometricMeta()){let meta=biometricMeta(),salt=unb64(meta.prfSalt),bb=await encryptDb(db,biometricCryptoKey,salt);localStorage.setItem(BIOMETRIC_BLOB_KEY,JSON.stringify(bb))}
+  secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');sessionStorage.setItem(FAIL_KEY,'0');toast('PIN changed & data re-encrypted ✓');
+ }catch(e){return toast('PIN change failed — old PIN remains')}
 }
 function changePinSafe(){changePin().catch(()=>toast('PIN change failed'))}function lockAppSafe(){if(typeof lockApp==='function')lockApp();else toast('Lock function unavailable')}
 render();
@@ -361,9 +387,9 @@ function getLockout(){return Number(sessionStorage.getItem(FAIL_UNTIL_KEY)||'0')
 function registerPinFailure(){let n=Number(sessionStorage.getItem(FAIL_KEY)||'0')+1;sessionStorage.setItem(FAIL_KEY,String(n));if(n>=5){let until=Date.now()+30000;sessionStorage.setItem(FAIL_UNTIL_KEY,String(until));sessionStorage.setItem(FAIL_KEY,'0');return until}return 0}
 function scheduleAutoLock(){clearTimeout(autoLockTimer);autoLockTimer=setTimeout(()=>lockApp(),10*60*1000)}
 function resetAutoLock(){if(sessionStorage.getItem('vvaf_unlocked')==='1')scheduleAutoLock()}
-function lockApp(){clearTimeout(autoLockTimer);autoLockTimer=null;sessionStorage.removeItem('vvaf_unlocked');sessionStorage.removeItem('vvaf_secure_session');secureReady=false;secureCryptoKey=null;showLogin('login')}
+function lockApp(){clearTimeout(autoLockTimer);autoLockTimer=null;sessionStorage.removeItem('vvaf_unlocked');sessionStorage.removeItem('vvaf_secure_session');secureReady=false;secureCryptoKey=null;pinCryptoKey=null;biometricCryptoKey=null;showLogin('login')}
 ['click','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,()=>resetAutoLock(),{passive:true}));
 function showLogin(mode='login'){let title=mode==='setup'?'Set 4-digit PIN':'Enter PIN';let box=document.createElement('div');box.id='pinOverlay';box.className='pinProOverlay';box.innerHTML=`<div class="pinProBg"></div><div class="pinProGlow pinProGlow1"></div><div class="pinProGlow pinProGlow2"></div><div class="pinProWrap"><div class="pinBrandTop"><div class="pinLogoRing"><img src="./office-logo.png" alt="Vetri Vinayaga Auto Finance"></div><div class="pinBrandName">VETRI VINAYAGA</div><div class="pinBrandSub">AUTO FINANCE</div><div class="pinBrandTag">நம்பிக்கை & வளர்ச்சி &nbsp;|&nbsp; TRUST & GROWTH</div></div><div class="pinCard"><div class="pinLock">🔒</div><div class="pinTitle">${title}</div><div class="pinHint">Secure access to your account</div><input id="pinInput" class="pinInputPro" inputmode="numeric" maxlength="4" type="password" placeholder="••••" autocomplete="off"><button id="pinBtn" class="pinBtnPro">Continue <span>→</span></button></div><div class="pinFooter">Vetri Vinayaga Auto Finance · ESTD. 2020</div></div>`;document.body.appendChild(box);document.getElementById('pinBtn').onclick=()=>submitPin(mode);setTimeout(()=>document.getElementById('pinInput')?.focus(),120);if(mode==='login')v69AddBiometricButton()}async function submitPin(mode){let v=document.getElementById('pinInput').value;if(!/^\d{4}$/.test(v))return toast('4 digit PIN enter பண்ணுங்க');if(mode==='login'){let until=getLockout();if(until&&until>Date.now())return toast('Too many attempts. 30 sec wait பண்ணுங்க')}let h=await hashPin(v);if(mode==='setup'){try{localStorage.setItem(PIN_KEY,h);let ok=await unlockSecure(v,'setup');if(!ok)throw new Error('setup');repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();toast('Secure data enabled ✓')}catch(e){localStorage.removeItem(PIN_KEY);return toast('Secure setup failed')}}if(mode==='login'){try{let ok=await unlockSecure(v,'login');if(!ok)throw new Error('unlock');localStorage.setItem(PIN_KEY,h);sessionStorage.setItem('vvaf_unlocked','1');sessionStorage.setItem(FAIL_KEY,'0');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();}catch(e){let until=registerPinFailure();return toast(until?'Too many wrong PINs. 30 sec lockout':'Wrong PIN')}}if(mode==='change'){toast('Use Change PIN from Settings')}}
 
 if(!localStorage.getItem(PIN_KEY))showLogin('setup');else if(sessionStorage.getItem('vvaf_unlocked')!=='1')showLogin('login');else scheduleAutoLock();
-</script><script>(function(){const el=document.getElementById('v69Privacy');function hide(){if(el)el.classList.add('show')}function show(){if(el)el.classList.remove('show')}document.addEventListener('visibilitychange',()=>document.hidden?hide():show());window.addEventListener('pagehide',hide);window.addEventListener('pageshow',show);document.addEventListener('contextmenu',e=>e.preventDefault())})();</script><script>['click','touchstart','keydown','input'].forEach(e=>document.addEventListener(e,()=>resetAutoLock(),{passive:true}));if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}));</script></body></html>
+</script><script>(function(){const el=document.getElementById('v70Privacy');function hide(){if(el)el.classList.add('show')}function show(){if(el)el.classList.remove('show')}document.addEventListener('visibilitychange',()=>document.hidden?hide():show());window.addEventListener('pagehide',hide);window.addEventListener('pageshow',show);document.addEventListener('contextmenu',e=>e.preventDefault())})();</script><script>['click','touchstart','keydown','input'].forEach(e=>document.addEventListener(e,()=>resetAutoLock(),{passive:true}));if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}));</script></body></html>
