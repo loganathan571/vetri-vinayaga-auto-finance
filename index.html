@@ -44,7 +44,7 @@ body{background:linear-gradient(180deg,#f7f9fc 0%,#eef3f9 100%);color:var(--ink)
 #app>.top+ .content{min-height:calc(100vh - 150px)}
 .v4section{color:#132642}.photoBox{border-color:#cfd8e5;background:#f8fafc}.schedule th{background:#f3f6fa;color:#41516a}.schedule td{background:#fff}
 @media(max-width:420px){.top{padding:22px 17px 21px}.brand{font-size:24px}.content{padding:18px 14px 24px}.card,.item{border-radius:19px}.action{padding:18px 15px}}
-</style><meta name="app-version" content="V63"><meta name="sw-cache" content="vvaf-v63"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
+</style><meta name="app-version" content="V64"><meta name="sw-cache" content="vvaf-v64"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><script>
 const KEY='vvaf_v2';
 const SECURE_KEY='vvaf_secure_db_v1';
 let db={customers:[],vehicles:[],finances:[],payments:[],cizings:[],transactions:[]};
@@ -314,6 +314,14 @@ render();
 // Keep existing V2 PIN implementation from V3 build when available; fallback setup/login.
 const PIN_KEY='vvaf_pin_hash_v2';
 async function hashPin(pin){const b=new TextEncoder().encode(pin),h=await crypto.subtle.digest('SHA-256',b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+let autoLockTimer=null;
+const FAIL_UNTIL_KEY='vvaf_pin_fail_until_v1';
+function getLockout(){return Number(sessionStorage.getItem(FAIL_UNTIL_KEY)||'0')}
+function registerPinFailure(){let n=Number(sessionStorage.getItem(FAIL_KEY)||'0')+1;sessionStorage.setItem(FAIL_KEY,String(n));if(n>=5){let until=Date.now()+30000;sessionStorage.setItem(FAIL_UNTIL_KEY,String(until));sessionStorage.setItem(FAIL_KEY,'0');return until}return 0}
+function scheduleAutoLock(){clearTimeout(autoLockTimer);autoLockTimer=setTimeout(()=>lockApp(),10*60*1000)}
+function resetAutoLock(){if(sessionStorage.getItem('vvaf_unlocked')==='1')scheduleAutoLock()}
+function lockApp(){clearTimeout(autoLockTimer);autoLockTimer=null;sessionStorage.removeItem('vvaf_unlocked');sessionStorage.removeItem('vvaf_secure_session');secureReady=false;secureCryptoKey=null;showLogin('login')}
+['click','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,()=>resetAutoLock(),{passive:true}));
 function showLogin(mode='login'){let title=mode==='setup'?'Set 4-digit PIN':'Enter PIN';let box=document.createElement('div');box.id='pinOverlay';box.className='pinProOverlay';box.innerHTML=`<div class="pinProBg"></div><div class="pinProGlow pinProGlow1"></div><div class="pinProGlow pinProGlow2"></div><div class="pinProWrap"><div class="pinBrandTop"><div class="pinLogoRing"><img src="./office-logo.png" alt="Vetri Vinayaga Auto Finance"></div><div class="pinBrandName">VETRI VINAYAGA</div><div class="pinBrandSub">AUTO FINANCE</div><div class="pinBrandTag">நம்பிக்கை & வளர்ச்சி &nbsp;|&nbsp; TRUST & GROWTH</div></div><div class="pinCard"><div class="pinLock">🔒</div><div class="pinTitle">${title}</div><div class="pinHint">Secure access to your account</div><input id="pinInput" class="pinInputPro" inputmode="numeric" maxlength="4" type="password" placeholder="••••" autocomplete="off"><button id="pinBtn" class="pinBtnPro">Continue <span>→</span></button></div><div class="pinFooter">Vetri Vinayaga Auto Finance · ESTD. 2020</div></div>`;document.body.appendChild(box);document.getElementById('pinBtn').onclick=()=>submitPin(mode);setTimeout(()=>document.getElementById('pinInput')?.focus(),120)}async function submitPin(mode){let v=document.getElementById('pinInput').value;if(!/^\d{4}$/.test(v))return toast('4 digit PIN enter பண்ணுங்க');if(mode==='login'){let until=getLockout();if(until&&until>Date.now())return toast('Too many attempts. 30 sec wait பண்ணுங்க')}let h=await hashPin(v);if(mode==='setup'){try{localStorage.setItem(PIN_KEY,h);let ok=await unlockSecure(v,'setup');if(!ok)throw new Error('setup');repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();toast('Secure data enabled ✓')}catch(e){localStorage.removeItem(PIN_KEY);return toast('Secure setup failed')}}if(mode==='login'){try{let ok=await unlockSecure(v,'login');if(!ok)throw new Error('unlock');localStorage.setItem(PIN_KEY,h);sessionStorage.setItem('vvaf_unlocked','1');sessionStorage.setItem(FAIL_KEY,'0');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();}catch(e){let until=registerPinFailure();return toast(until?'Too many wrong PINs. 30 sec lockout':'Wrong PIN')}}if(mode==='change'){toast('Use Change PIN from Settings')}}
 
 if(!localStorage.getItem(PIN_KEY))showLogin('setup');else if(sessionStorage.getItem('vvaf_unlocked')!=='1')showLogin('login');else scheduleAutoLock();
