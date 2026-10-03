@@ -8,3 +8,7 @@ V78 EXISTING LOAN IMPORT
 6. Save/export the filled sheet as CSV for upload, OR copy the Excel rows and paste into the app.
 7. App validates rows before import. Existing V77 data is not deleted or replaced.
 8. Opening Paid is stored separately, so old collections are not counted as today's income.
+
+
+V78 STORAGE FIX
+Imported loans are persisted in IndexedDB-backed encrypted storage so large imports are not lost on browser refresh due to localStorage quota limits.
