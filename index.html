@@ -49,7 +49,7 @@ body{background:linear-gradient(180deg,#f7f9fc 0%,#eef3f9 100%);color:var(--ink)
 
 /* V71 Strong Device Security */
 .v70security{background:#f5f9ff;border:1px solid #cfe0f8;border-radius:16px;padding:13px;margin:10px 0;color:#17375f;font-size:13px;line-height:1.55}.v70bioBtn{width:100%;margin-bottom:8px}.v69privacy{position:fixed;inset:0;background:#07101f;color:#fff;z-index:1000;display:none;align-items:center;justify-content:center;text-align:center;padding:28px;font-weight:800}.v69privacy.show{display:flex}.v69privacy .box{max-width:360px}.v69privacy .lock{font-size:52px;margin-bottom:14px}
-.v78import{background:#f6f8fb;border:1px solid #dfe5ef;border-radius:18px;padding:14px;margin:10px 0}.v78import textarea{width:100%;min-height:150px;border:1px solid #d9dee8;border-radius:14px;padding:12px;font-size:13px;font-family:ui-monospace,monospace}.v78counts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}.v78count{background:#fff;border:1px solid #e3e7ee;border-radius:14px;padding:10px}.v78count b{display:block;font-size:20px}.v78ok{color:#16815a}.v78bad{color:#c43737}</style><meta name="app-version" content="V78"><meta name="sw-cache" content="vvaf-v78"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><div id="v70Privacy" class="v69privacy"><div class="box"><div class="lock">🔒</div><div>App protected</div><div style="opacity:.65;margin-top:8px;font-size:13px">Screen content is hidden while the app is not visible.</div></div></div><script>
+.v78import{background:#f6f8fb;border:1px solid #dfe5ef;border-radius:18px;padding:14px;margin:10px 0}.v78import textarea{width:100%;min-height:150px;border:1px solid #d9dee8;border-radius:14px;padding:12px;font-size:13px;font-family:ui-monospace,monospace}.v78counts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}.v78count{background:#fff;border:1px solid #e3e7ee;border-radius:14px;padding:10px}.v78count b{display:block;font-size:20px}.v78ok{color:#16815a}.v78bad{color:#c43737}</style><meta name="app-version" content="V78-MANUAL-CLEAN"><meta name="sw-cache" content="vvaf-v78-manual-clean"></head><body><div id="app"></div><div id="modal" class="modal hidden"></div><div id="v70Privacy" class="v69privacy"><div class="box"><div class="lock">🔒</div><div>App protected</div><div style="opacity:.65;margin-top:8px;font-size:13px">Screen content is hidden while the app is not visible.</div></div></div><script>
 const KEY='vvaf_v2';
 const SECURE_KEY='vvaf_secure_db_v1';
 let db={customers:[],vehicles:[],finances:[],payments:[],cizings:[],transactions:[]};
@@ -60,6 +60,7 @@ let pinCryptoKey=null;
 let biometricCryptoKey=null;
 let legacyDb=null;
 const BIOMETRIC_META_KEY='vvaf_biometric_meta_v2';
+const BIOMETRIC_PIN_WRAP_KEY='vvaf_biometric_pin_wrap_v1';
 const BIOMETRIC_BLOB_KEY='vvaf_biometric_blob_v2';
 const SECURITY_VERSION=2;
 const FAIL_KEY='vvaf_pin_fail_v1';
@@ -74,6 +75,8 @@ function unb64(s){let bin=atob(s),a=new Uint8Array(bin.length);for(let i=0;i<bin
 async function deriveSecureKey(pin,salt){let base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function encryptDb(data,pinOrKey,saltInput){let salt=saltInput||crypto.getRandomValues(new Uint8Array(16)),key=typeof pinOrKey==='string'?await deriveSecureKey(pinOrKey,salt):pinOrKey,iv=crypto.getRandomValues(new Uint8Array(12)),plain=new TextEncoder().encode(JSON.stringify(data)),cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);return {version:1,salt:b64(salt),iv:b64(iv),data:b64(new Uint8Array(cipher))}}
 async function decryptWithKey(blob,key){let plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},key,unb64(blob.data));return normalizeDb(JSON.parse(new TextDecoder().decode(plain)))}
+async function encryptWithKey(data,key){let iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,data);return {v:1,iv:b64(iv),data:b64(new Uint8Array(ct))}}
+async function decryptBytesWithKey(blob,key){return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(blob.iv)},key,unb64(blob.data)))}
 async function decryptSecure(blob,pin){let salt=unb64(blob.salt),key=await deriveSecureKey(pin,salt),out=await decryptWithKey(blob,key);return {db:out,key}}
 async function deriveBiometricKey(prfOutput,salt){let base=await crypto.subtle.importKey('raw',prfOutput,'HKDF',false,['deriveKey']);return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt,info:new TextEncoder().encode('VVAF-BIOMETRIC-V2')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 const IDB_NAME='vvaf_secure_store_v2';
@@ -125,68 +128,57 @@ async function secureSave(){
 
 const LEGACY_CLOSED_RANGES = "1,3,5,7,9-11,13-15,17-20,22-23,25-26,28-35,37-41,44-48,50-55,57-61,63-65,67-69,71,73,75-87,89-90,92-95,98,100-101,103-106,108-117,119-128,130-133,135-140,143,146,148,150-153,155-159,161-209,211-212,215,217-221,224-225,227-231,233-248,250,252,254-257,260-265,268-271,273-275,278-279,281-282,284-287,289-301,304,306-342,345-368,370-387,389-399,401-404,406-408,410-412,415-416,418-435,437-451,453,455-456,458,460,462-475,477-485,487-494,496-499,501-509,511-536,538-540,542-543,545-550,552-573,576,578-585,587-613,615-621,623-663,665-673,675-686,688-689,691-694,696-703,706-721,723-724,726-728,730-732,735-743,745-761,765-773,775-789,791-796,798-813,815-833,841-846,848-856,858-860,863-865,867-869,871-952,954-960,962,964-966,968-970,972-976,978-984,986-992,994-1001,1003-1006,1008-1017,1019-1020,1023-1029,1031-1035,1037,1039-1042,1044-1070,1072-1079,1081-1090,1093-1097,1099-1100,1102-1103,1105-1107,1109-1116,1118,1120-1121,1123-1141,1143-1148,1151-1165,1167-1169,1171-1197,1199-1204,1206-1207,1209-1211,1213-1252,1254-1261,1263-1271,1273-1287,1289-1293,1295-1318,1320-1325,1327-1331,1338-1342,1345-1355,1357-1358,1360-1373,1375-1384,1386,1388-1395,1397-1398,1400-1401,1403-1406,1408-1414,1416-1421,1423-1425,1427-1428,1430,1432-1435,1437-1438,1440-1477,1479-1483,1485-1493,1495-1498,1500,1502,1504-1514,1516-1521,1523-1524,1526-1528,1530-1540,1542-1547,1549-1554,1556-1573,1575-1583,1585-1595,1597,1599-1607,1609-1612,1614-1620,1622-1629,1631-1635,1637-1639,1641,1643,1645,1647-1654,1656-1660,1662,1664-1670,1672-1673,1676-1683,1685-1686,1688-1692,1694,1696-1703,1705-1706,1708,1710-1714,1716-1718,1721-1731,1733-1736,1738,1741,1743-1745,1747-1750,1753-1757,1759,1761-1765,1767-1769,1771-1781,1783-1784,1786-1788,1790-1793,1795-1796,1798-1799,1802,1805,1808,1810-1813,1815,1817-1818,1820-1822,1825-1829,1831-1833,1835-1836,1838-1839,1841-1846,1848,1850,1852-1853,1855-1856,1859-1860,1863-1865,1868-1870,1874,1876-1879,1881-1882,1886-1887,1889,1893,1896,1898-1899,1901-1902,1904,1907-1909,1912,1919,1923,1925-1926,1930,1933,1941-1942,1945,1962,1964,1966,1969-1971,1979,1988,2013,2017,2021,2036,2041,2053,2063,2078,2208,2219,2223,2233-2234,2352".split(',').flatMap(x=>{let [a,b]=x.split('-').map(Number);return b?Array.from({length:b-a+1},(_,i)=>a+i):[a]});
 const LEGACY_CLOSED_SET = new Set(LEGACY_CLOSED_RANGES);
-const OPTEC_CLOSURE_REPAIR_VERSION = 4;
+const OPTEC_CLOSURE_REPAIR_VERSION = 5;
 function legacyImportedIdMap(){let n=0;db.finances.filter(f=>f&&f.imported).forEach(f=>{if(!f.legacyHpLedSno){n++;f.legacyHpLedSno=n}else n=Math.max(n,Number(f.legacyHpLedSno)||0)});return true}
 async function repairSchedules(){
  legacyImportedIdMap();
- let changed=false;
  db.finances.forEach(f=>{
   let ten=Number(f.tenure||0), emi=Number(f.emi||0), paid=Number(f.openingPaid||f.paidAmount||0), paidInst=Math.min(ten,Math.max(0,Number(f.openingInstallmentsPaid||0))), next=String(f.nextDueDate||'').slice(0,10);
-  let legacyClosed=!!(f.imported && LEGACY_CLOSED_SET.has(Number(f.legacyHpLedSno)));
-  if(!ten||!emi)return;
+  if(!ten||!emi||!f.imported)return;
+  let legacyClosed=LEGACY_CLOSED_SET.has(Number(f.legacyHpLedSno));
+  let validNext=/^\d{4}-\d{2}-\d{2}$/.test(next);
+  let schedule=[];
   if(legacyClosed){
-   let needsRepair=f.optecClosureRepairVersion!==OPTEC_CLOSURE_REPAIR_VERSION || f.importStatus!=='closed' || Number(f.openingInstallmentsPaid||0)!==ten || !Array.isArray(f.schedule) || f.schedule.length!==ten || f.schedule.some(x=>String(x?.status||'').toLowerCase()!=='paid');
-   if(!needsRepair)return;
-   let schedule=[];
    let base=f.loanDate||'';
-   let totalPayable=Number(f.totalPayable||0) || emi*ten;
    for(let i=1;i<=ten;i++)schedule.push({no:i,dueDate:base?addMonths(base,i):'',amount:emi,status:'Paid',paidDate:null});
    f.schedule=schedule;
-   f.totalPayable=totalPayable;
    f.openingInstallmentsPaid=ten;
+   f.totalPayable=Number(f.totalPayable||0)||schedule.reduce((a,x)=>a+Number(x.amount||0),0);
+   f.outstanding=0;
    f.importStatus='closed';
    f.nextDueDate='';
    f.optecClosureRepairVersion=OPTEC_CLOSURE_REPAIR_VERSION;
-   f.outstanding=0;
-   changed=true;
    return;
   }
-  let validNext=/^\d{4}-\d{2}-\d{2}$/.test(next);
-  let base=f.loanDate||'';
-  let schedule=[];
   if(validNext && paidInst<ten){
    let nextNo=paidInst+1;
-   for(let i=1;i<=ten;i++){
-    let due=addMonths(next,nextNo-i);
-    schedule.push({no:i,dueDate:due,amount:emi,status:i<=paidInst?'Paid':'Pending',paidDate:null});
-   }
-  }else if(base){
-   for(let i=1;i<=ten;i++)schedule.push({no:i,dueDate:addMonths(base,i),amount:emi,status:i<=paidInst?'Paid':'Pending',paidDate:null});
+   for(let i=1;i<=ten;i++)schedule.push({no:i,dueDate:addMonths(next,nextNo-i),amount:emi,status:i<=paidInst?'Paid':'Pending',paidDate:null});
+  }else{
+   let base=f.loanDate||'';
+   for(let i=1;i<=ten;i++)schedule.push({no:i,dueDate:base?addMonths(base,i):'',amount:emi,status:i<=paidInst?'Paid':'Pending',paidDate:null});
   }
-  if(schedule.length===ten){
-   // Legacy Optec loans can have a small final-installment adjustment.
-   // When all regular installments are paid, derive the actual final amount
-   // from the imported paid amount instead of inventing a new charge.
-   if(paidInst>=ten){
-    let finalAmt=paid-emi*(ten-1);
-    if(finalAmt>0 && Math.abs(finalAmt-emi)>0.009) schedule[ten-1].amount=finalAmt;
-    f.totalPayable=paid;
-    f.outstanding=0;
-    f.importStatus='closed';
-   }else{
-    f.totalPayable=emi*ten;
-    f.outstanding=Math.max(0,f.totalPayable-paid);
-   }
-   f.schedule=schedule;
-   f.nextDueDate=validNext?next:'';
+  if(paidInst>=ten){
+   let finalAmt=paid-emi*(ten-1);
+   if(finalAmt>0&&Math.abs(finalAmt-emi)>0.009)schedule[ten-1].amount=finalAmt;
+   schedule.forEach(x=>x.status='Paid');
+   f.totalPayable=schedule.reduce((a,x)=>a+Number(x.amount||0),0);
+   f.outstanding=0;
+   f.importStatus='closed';
+  }else{
+   f.totalPayable=schedule.reduce((a,x)=>a+Number(x.amount||0),0);
+   f.outstanding=Math.max(0,f.totalPayable-paid);
+   if(String(f.importStatus||'').toLowerCase()==='closed')f.importStatus='active';
   }
+  f.schedule=schedule;
+  f.nextDueDate=validNext?next:'';
+  f.optecClosureRepairVersion=OPTEC_CLOSURE_REPAIR_VERSION;
  });
  await save()
 }
 
 let page='home';
 function save(){savePromise=savePromise.then(()=>secureSave());return savePromise}function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}function today(){return new Date().toISOString().slice(0,10)}function addMonths(s,n){let d=new Date(s+'T12:00:00'),day=d.getDate(),y=d.getFullYear(),m=d.getMonth()+n,last=new Date(y,m+1,0).getDate();return new Date(y,m,Math.min(day,last),12).toISOString().slice(0,10)}function toast(t){let x=document.getElementById('toast');if(!x){x=document.createElement('div');x.id='toast';x.style='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0b1220;color:#fff;padding:12px 17px;border-radius:14px;z-index:300;font-weight:800';document.body.appendChild(x)}x.textContent=t;x.classList.remove('hidden');setTimeout(()=>x.classList.add('hidden'),1800)}
-function paidFor(f){return Number(f.openingPaid||0)+db.payments.filter(p=>p.financeId===f.id).reduce((s,p)=>s+Number(p.amount||0),0)}function installmentFor(f){let ps=db.payments.filter(p=>p.financeId===f.id);let opening=Number(f.openingInstallmentsPaid||0);return Math.min(f.tenure||1,opening+ps.length+1)}function outstanding(f){if(String(f.importStatus||'').toLowerCase()==='closed')return 0;return Math.max(0,Number(f.totalPayable||0)-paidFor(f))}function dueStatus(f){if(String(f.importStatus||'').toLowerCase()==='closed'||outstanding(f)<=0)return 'COMPLETED';return String(f.importStatus||'').toLowerCase()==='overdue'?'OVERDUE':'DUE'}
+function paidFor(f){return Number(f.openingPaid||0)+db.payments.filter(p=>p.financeId===f.id).reduce((s,p)=>s+Number(p.amount||0),0)}function installmentFor(f){let ps=db.payments.filter(p=>p.financeId===f.id);let opening=Number(f.openingInstallmentsPaid||0);return Math.min(f.tenure||1,opening+ps.length+1)}function outstanding(f){if(String(f.importStatus||'').toLowerCase()==='closed')return 0;let total=Array.isArray(f.schedule)&&f.schedule.length?f.schedule.reduce((a,x)=>a+Number(x?.amount||0),0):Number(f.totalPayable||0);return Math.max(0,total-paidFor(f))}function dueStatus(f){if(String(f.importStatus||'').toLowerCase()==='closed'||outstanding(f)<=0)return 'COMPLETED';return String(f.importStatus||'').toLowerCase()==='overdue'?'OVERDUE':'DUE'}
 function cizingExpenseTotal(x){return Number(x?.recoveryExpense||0)+Number(x?.repairExpense||0)+Number(x?.parkingExpense||0)+Number(x?.otherExpense||0)}function cizingExpenseTotalAll(){return db.cizings.reduce((a,x)=>a+cizingExpenseTotal(x),0)}function cizingExpenseOnDate(date){return db.cizings.filter(x=>dateKey(x.date)===date).reduce((a,x)=>a+cizingExpenseTotal(x),0)}function cizingExpenseInMonth(month){return db.cizings.filter(x=>monthKey(x.date)===month).reduce((a,x)=>a+cizingExpenseTotal(x),0)}
 function cizingCustomerReport(from,to){let inRange=x=>{let d=dateKey(x.date);return d>=from&&d<=to},rows={};db.cizings.filter(inRange).forEach(x=>{let f=db.finances.find(z=>z.id===x.financeId),c=db.customers.find(z=>z.id===(f?.customerId||x.customerId));let key=c?.id||x.customerId||x.id;if(!rows[key])rows[key]={name:c?.name||x.customerName||'Customer',mobile:c?.mobile||x.mobile||'',count:0,recovery:0,repair:0,parking:0,other:0,total:0};let r=rows[key];r.count++;r.recovery+=Number(x.recoveryExpense||0);r.repair+=Number(x.repairExpense||0);r.parking+=Number(x.parkingExpense||0);r.other+=Number(x.otherExpense||0);r.total+=cizingExpenseTotal(x)});return Object.values(rows).sort((a,b)=>b.total-a.total)}
 function financeMonthlyInterest(f){let loan=Number(f?.loanAmount??f?.financeAmount??f?.finance??f?.amount??f?.price??0);let mi=Number(f?.monthlyInterest);return mi>0?mi:loan*0.025}
@@ -299,7 +291,7 @@ function collection(){
   </div>${nav()}<button class="fab" onclick="openPayment()">＋</button>`
 }
 function setCollectionTab(tab){collectionTab=tab;render()}
-function more(){let s=stats();return `<div class="top"><div class="brand">Reports & Accounts</div><div class="sub">Business summary</div></div><div class="content"><button class="action" style="width:100%;margin-bottom:12px" onclick="openSettings()">⚙️ Settings & Backup</button><button class="action" style="width:100%;margin-bottom:12px" onclick="openExistingLoanImport()"><b>📥</b>Import Existing Loans</button><div class="title" style="margin-top:4px">Reports</div><div class="actions" style="margin-top:8px"><button class="action primary" onclick="openReports()"><b>📊</b>Collection & Expense Reports</button><button class="action" onclick="openCustomerStatement()"><b>👤</b>Customer Statement</button></div><button class="action" style="width:100%;margin-bottom:15px" onclick="openReceiptList()"><b>🧾</b>Payment Receipts</button><div class="cards"><div class="card"><div class="muted">Income</div><div class="metric green">${money(s.income)}</div></div><div class="card"><div class="muted">Expense</div><div class="metric red">${money(s.expense)}</div></div></div><div class="actions"><button class="action" onclick="openTransaction('income')"><b>＋</b>Add Income</button><button class="action" onclick="openTransaction('expense')"><b>−</b>Add Expense</button></div><div class="title">Transactions</div><div class="list">${(()=>{let tx=db.transactions.map(t=>({id:t.id,date:t.date,category:t.category,amount:Number(t.amount||0),type:t.type,note:t.note||''}));db.cizings.forEach(x=>{let total=cizingExpenseTotal(x);if(total)tx.push({date:x.date,category:'Cizing Expense',amount:total,type:'expense',note:(x.customerName||'')+' · '+(x.vehicleNo||'')});});tx.sort((a,b)=>new Date(b.date)-new Date(a.date));return tx.map(t=>`<div class="item"><div class="row"><b>${esc(t.category)}</b><span class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}${money(t.amount)}</span></div><div class="muted">${esc(t.note||'')} · ${new Date(t.date).toLocaleDateString('en-IN')}</div>${t.type==='expense'&&t.id?`<div class="btnrow"><button class="btn" onclick="deleteTransaction('${t.id}')">🗑️ Delete Expense</button></div>`:''}</div>`).join('')||'<div class="empty">Transactions இல்லை</div>'})()}</div></div>${nav()}`}
+function more(){let s=stats();return `<div class="top"><div class="brand">Reports & Accounts</div><div class="sub">Business summary</div></div><div class="content"><button class="action" style="width:100%;margin-bottom:12px" onclick="openSettings()">⚙️ Settings & Backup</button><div class="notice" style="margin-bottom:12px">✍️ Manual Loan Entry Mode — புதிய loan-களை ஒன்றொன்றாக Add Finance மூலம் enter செய்யலாம்.</div><div class="title" style="margin-top:4px">Reports</div><div class="actions" style="margin-top:8px"><button class="action primary" onclick="openReports()"><b>📊</b>Collection & Expense Reports</button><button class="action" onclick="openCustomerStatement()"><b>👤</b>Customer Statement</button></div><button class="action" style="width:100%;margin-bottom:15px" onclick="openReceiptList()"><b>🧾</b>Payment Receipts</button><div class="cards"><div class="card"><div class="muted">Income</div><div class="metric green">${money(s.income)}</div></div><div class="card"><div class="muted">Expense</div><div class="metric red">${money(s.expense)}</div></div></div><div class="actions"><button class="action" onclick="openTransaction('income')"><b>＋</b>Add Income</button><button class="action" onclick="openTransaction('expense')"><b>−</b>Add Expense</button></div><div class="title">Transactions</div><div class="list">${(()=>{let tx=db.transactions.map(t=>({id:t.id,date:t.date,category:t.category,amount:Number(t.amount||0),type:t.type,note:t.note||''}));db.cizings.forEach(x=>{let total=cizingExpenseTotal(x);if(total)tx.push({date:x.date,category:'Cizing Expense',amount:total,type:'expense',note:(x.customerName||'')+' · '+(x.vehicleNo||'')});});tx.sort((a,b)=>new Date(b.date)-new Date(a.date));return tx.map(t=>`<div class="item"><div class="row"><b>${esc(t.category)}</b><span class="${t.type==='income'?'green':'red'}">${t.type==='income'?'+':'-'}${money(t.amount)}</span></div><div class="muted">${esc(t.note||'')} · ${new Date(t.date).toLocaleDateString('en-IN')}</div>${t.type==='expense'&&t.id?`<div class="btnrow"><button class="btn" onclick="deleteTransaction('${t.id}')">🗑️ Delete Expense</button></div>`:''}</div>`).join('')||'<div class="empty">Transactions இல்லை</div>'})()}</div></div>${nav()}`}
 
 function dateKey(iso){if(!iso)return '';let d=new Date(iso);return Number.isNaN(d.getTime())?'':d.toISOString().slice(0,10)}
 function monthKey(iso){let d=new Date(iso);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
@@ -487,10 +479,7 @@ function parseLoanRows(text){
  });
  return {rows:out,errors}
 }
-function openExistingLoanImport(){
- window.pendingLoanImport=null;
- modal(`<h2>📥 Existing Loan Import</h2><div class="notice"><b>2500 old loans</b> ஒரே தடவையில் கொண்டு வர இந்த option. Excel-ல் template open பண்ணி data fill செய்யலாம். Excel-லிருந்து rows-ஐ copy செய்து கீழே paste பண்ணினாலும் வேலை செய்யும்.</div><div class="v78import"><button class="btn primary" style="width:100%;margin-bottom:8px" onclick="downloadLoanTemplate()">⬇️ Download Excel Template (CSV)</button><div class="small muted">Template-ஐ Excel-ல் open செய்து fill பண்ணி CSV ஆக save செய்யலாம். Existing paid amount மட்டும் opening balance-ஆக கணக்கில் வரும்.</div></div><div class="field"><label>Upload CSV</label><input id="loanImportFile" type="file" accept=".csv,text/csv" onchange="loadLoanImportFile(this)"></div><div class="field"><label>அல்லது Excel-லிருந்து copy செய்து இங்கே paste செய்யவும்</label><textarea id="loanImportText" placeholder="Header row + loan rows paste செய்யவும்"></textarea></div><div class="btnrow"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="previewLoanImport()">Preview & Validate</button></div>`)
-}
+function openExistingLoanImport(){toast("Manual loan entry மட்டும் பயன்படுத்தலாம் ✓")}
 function loadLoanImportFile(input){let f=input.files?.[0];if(!f)return;let r=new FileReader();r.onload=()=>{let el=document.getElementById('loanImportText');if(el)el.value=r.result||''};r.readAsText(f)}
 function previewLoanImport(){let text=document.getElementById('loanImportText')?.value||'';let r=parseLoanRows(text);window.pendingLoanImport=r;if(!r.rows.length&&!r.errors.length)return toast('Data paste/upload பண்ணுங்க');let valid=r.rows.length,errs=r.errors.length;modal(`<h2>🔎 Import Preview</h2><div class="v78counts"><div class="v78count"><span class="muted">Valid Loans</span><b class="v78ok">${valid}</b></div><div class="v78count"><span class="muted">Errors</span><b class="v78bad">${errs}</b></div></div>${errs?`<div class="v78import"><b class="v78bad">Fix these rows before import:</b><div class="small" style="margin-top:8px">${r.errors.slice(0,30).map(esc).join('<br>')}${errs>30?`<br>...and ${errs-30} more`:''}</div></div>`:''}<div class="v4section">Sample Preview</div><div style="overflow:auto"><table class="schedule"><tr><th>Customer</th><th>Vehicle</th><th>Loan</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr>${r.rows.slice(0,10).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.vehicle)}</td><td>${money(x.loan)}</td><td>${money(x.paid)}</td><td>${money(x.total-x.paid)}</td><td>${esc(x.status)}</td></tr>`).join('')}</table></div><div class="notice" style="margin-top:10px">Import-ல் பழைய payment history உருவாக்கப்படாது. Paid Amount <b>Opening Paid</b> ஆக save ஆகும்; இன்றிலிருந்து வரும் collection மட்டும் புதிய payment history-ல் வரும்.</div><div class="btnrow"><button class="btn" onclick="openExistingLoanImport()">Back</button><button class="btn primary" ${errs?'disabled style="opacity:.5"':''} onclick="confirmLoanImport()">Import ${valid} Loans</button></div>`)
 }
@@ -500,7 +489,7 @@ async function confirmLoanImport(){let r=window.pendingLoanImport;if(!r||r.error
  });
  await save();window.pendingLoanImport=null;closeModal();render();toast(`${created} loans imported ✓`)
 }
-function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V71 Security: AES-GCM local encryption + PIN + device biometric unlock when supported. Auto-lock after 10 minutes.</div><div class="v70security"><b>📱 Device Security</b><br>Fingerprint/biometric uses the phone's platform authenticator and a WebAuthn PRF-derived encryption key when supported. PIN remains the fallback.</div><button class="btn v70bioBtn" onclick="registerBiometric()">🆔 Enable Fingerprint / Device Unlock</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="openExistingLoanImport()">📥 Import Existing Loans (Excel/CSV)</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
+function openSettings(){modal(`<h2>Settings & Backup</h2><div class="notice">🔐 V71 Security: AES-GCM local encryption + PIN + device biometric unlock when supported. Auto-lock after 10 minutes.</div><div class="v70security"><b>📱 Device Security</b><br>Fingerprint/biometric uses the phone's platform authenticator and a WebAuthn PRF-derived encryption key when supported. PIN remains the fallback.</div><button class="btn v70bioBtn" onclick="registerBiometric()">🆔 Enable Fingerprint / Device Unlock</button><div class="notice" style="margin-bottom:8px">✍️ Manual Loan Entry மட்டும் enabled.</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="changePinSafe()">🔐 Change PIN</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="backupData()">💾 Secure Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="restoreData()">♻️ Restore Backup</button><button class="btn" style="width:100%;margin-bottom:8px" onclick="lockAppSafe()">🔒 Lock App Now</button><button class="btn" style="width:100%" onclick="closeModal()">Close</button>`)}
 async function backupData(){
  if(!secureReady||!pinCryptoKey)return toast('PIN unlock required for backup');
  try{
@@ -588,18 +577,26 @@ async function biometricUnlock(){
  let meta=biometricMeta();
  if(!meta||!meta.credId||!meta.prfSalt||!biometricSupported())return {ok:false,error:'Biometric setup not found'};
  try{
-  let salt=unb64(meta.prfSalt),blob=null;
-  try{blob=await idbGet('biometric_db')}catch(e){}
-  if(!blob)blob=JSON.parse(localStorage.getItem(BIOMETRIC_BLOB_KEY)||'null');
-  if(!blob)return {ok:false,error:'Biometric encrypted data not found'};
-  let a=await getBiometricAssertion(meta,salt);
-  let out=a?.getClientExtensionResults?.()?.prf?.results?.first;
+  let salt=unb64(meta.prfSalt),a=await getBiometricAssertion(meta,salt),out=a?.getClientExtensionResults?.()?.prf?.results?.first;
   if(!out)return {ok:false,error:'Biometric PRF unavailable'};
-  let key=await deriveBiometricKey(new Uint8Array(out),salt),plain=await decryptWithKey(blob,key);
-  db=plain;biometricCryptoKey=key;pinCryptoKey=null;secureCryptoKey=null;secureReady=true;
-  sessionStorage.setItem('vvaf_secure_session','1');
-  sessionStorage.setItem('vvaf_biometric_verified','1');
-  sessionStorage.setItem('vvaf_unlocked','1');
+  let key=await deriveBiometricKey(new Uint8Array(out),salt);
+  let wrap=null;try{wrap=await idbGet(BIOMETRIC_PIN_WRAP_KEY)}catch(e){}
+  if(!wrap)wrap=JSON.parse(localStorage.getItem(BIOMETRIC_PIN_WRAP_KEY)||'null');
+  if(wrap){
+   let pin=await decryptBytesWithKey(wrap,key);
+   let ptxt=new TextDecoder().decode(pin);
+   let raw=await idbGet('secure_db');
+   if(!raw)raw=JSON.parse(localStorage.getItem(SECURE_KEY)||'null');
+   if(!raw)throw new Error('secure database missing');
+   let r=await decryptSecure(raw,ptxt);
+   db=r.db;pinCryptoKey=r.key;secureCryptoKey=r.key;secureSalt=unb64(raw.salt);biometricCryptoKey=key;secureReady=true;
+  }else{
+   let blob=null;try{blob=await idbGet('biometric_db')}catch(e){}
+   if(!blob)blob=JSON.parse(localStorage.getItem(BIOMETRIC_BLOB_KEY)||'null');
+   if(!blob)return {ok:false,error:'Biometric encrypted data not found'};
+   let plain=await decryptWithKey(blob,key);db=plain;biometricCryptoKey=key;pinCryptoKey=null;secureCryptoKey=null;secureReady=true;
+  }
+  sessionStorage.setItem('vvaf_secure_session','1');sessionStorage.setItem('vvaf_biometric_verified','1');sessionStorage.setItem('vvaf_unlocked','1');
   return {ok:true};
  }catch(e){return {ok:false,error:biometricErrorText(e)}}
 }
@@ -620,21 +617,29 @@ async function v69AddBiometricButton(){
    return toast('Fingerprint unlock failed');
   }
   try{await repairSchedules();}catch(e){console.error('Optec closure repair after biometric unlock failed',e)}
-  // Keep the PIN-encrypted database in sync with the biometric-unlocked data.
-  // Biometric unlock intentionally does not have the PIN key, so ask for the
-  // existing PIN once and re-encrypt the current (authoritative) DB under it.
+  // First fingerprint use only: link the biometric credential to the existing PIN once.
+  // After that, fingerprint and PIN both open the same authoritative encrypted database.
   try{
-   let p=prompt('PIN database sync: enter your current 4-digit PIN once');
-   if(/^\d{4}$/.test(p||'')){
-    let blob=await encryptDb(db,p);
-    await idbSet('secure_db',blob);
-    localStorage.removeItem(SECURE_KEY);
-    let pk=await deriveSecureKey(p,unb64(blob.salt));
-    pinCryptoKey=pk; secureCryptoKey=pk; secureSalt=unb64(blob.salt);
-    localStorage.setItem(PIN_KEY,await hashPin(p));
-    toast('PIN data synced ✓');
+   let wrap=null;try{wrap=await idbGet(BIOMETRIC_PIN_WRAP_KEY)}catch(e){}
+   if(!wrap)wrap=JSON.parse(localStorage.getItem(BIOMETRIC_PIN_WRAP_KEY)||'null');
+   if(!wrap){
+    let p=prompt('Fingerprint setup: enter your current 4-digit PIN once');
+    if(!/^\d{4}$/.test(p||''))throw new Error('PIN required');
+    let raw=await idbGet('secure_db');
+    if(!raw)raw=JSON.parse(localStorage.getItem(SECURE_KEY)||'null');
+    if(raw){await decryptSecure(raw,p)}else{
+      let blob=await encryptDb(db,p);await idbSet('secure_db',blob);localStorage.removeItem(SECURE_KEY);raw=blob;
+    }
+    let wrapBlob=await encryptWithKey(new TextEncoder().encode(p),biometricCryptoKey);await idbSet(BIOMETRIC_PIN_WRAP_KEY,wrapBlob);localStorage.setItem(BIOMETRIC_PIN_WRAP_KEY,JSON.stringify(wrapBlob));
+    let r=await decryptSecure(raw,p);db=r.db;pinCryptoKey=r.key;secureCryptoKey=r.key;secureSalt=unb64(raw.salt);
+    let meta=biometricMeta(),salt=unb64(meta.prfSalt),bb=await encryptDb(db,biometricCryptoKey,salt);await idbSet('biometric_db',bb);localStorage.removeItem(BIOMETRIC_BLOB_KEY);
+    toast('Fingerprint setup synced ✓');
+   }else{
+    // biometricUnlock() already loaded the authoritative PIN database when the wrap exists.
+    // Keep a localStorage copy as a durable fallback so fingerprint never asks for PIN again.
+    try{localStorage.setItem(BIOMETRIC_PIN_WRAP_KEY,JSON.stringify(wrap))}catch(e){}
    }
-  }catch(e){console.error('PIN database sync failed',e)}
+  }catch(e){console.error('Fingerprint/PIN sync failed',e);return toast('Fingerprint sync failed — PIN unchanged')}
   clearTimeout(autoLockTimer);document.getElementById('pinOverlay')?.remove();render();scheduleAutoLock();toast('Fingerprint unlock successful ✓');
  };
  card.appendChild(b);
@@ -665,6 +670,7 @@ async function changePin(){
   await idbSet('secure_db',newBlob);
   localStorage.removeItem(SECURE_KEY);
   localStorage.setItem(PIN_KEY,await hashPin(next));
+  if(biometricCryptoKey){let wb=await encryptWithKey(new TextEncoder().encode(next),biometricCryptoKey);await idbSet(BIOMETRIC_PIN_WRAP_KEY,wb)}
   secureSalt=unb64(newBlob.salt);secureCryptoKey=newPinKey;pinCryptoKey=newPinKey;
   if(biometricCryptoKey&&biometricMeta()){let meta=biometricMeta(),salt=unb64(meta.prfSalt),bb=await encryptDb(db,biometricCryptoKey,salt);await idbSet('biometric_db',bb);localStorage.removeItem(BIOMETRIC_BLOB_KEY)}
   secureReady=true;sessionStorage.setItem('vvaf_secure_session','1');sessionStorage.setItem(FAIL_KEY,'0');toast('PIN changed & data re-encrypted ✓');
@@ -691,5 +697,18 @@ function lockApp(){clearTimeout(autoLockTimer);autoLockTimer=null;sessionStorage
 ['click','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,()=>resetAutoLock(),{passive:true}));
 function showLogin(mode='login'){let title=mode==='setup'?'Set 4-digit PIN':'Enter PIN';let box=document.createElement('div');box.id='pinOverlay';box.className='pinProOverlay';box.innerHTML=`<div class="pinProBg"></div><div class="pinProGlow pinProGlow1"></div><div class="pinProGlow pinProGlow2"></div><div class="pinProWrap"><div class="pinBrandTop"><div class="pinLogoRing"><img src="./office-logo.png" alt="Vetri Vinayaga Auto Finance"></div><div class="pinBrandName">VETRI VINAYAGA</div><div class="pinBrandSub">AUTO FINANCE</div><div class="pinBrandTag">நம்பிக்கை & வளர்ச்சி &nbsp;|&nbsp; TRUST & GROWTH</div></div><div class="pinCard"><div class="pinLock">🔒</div><div class="pinTitle">${title}</div><div class="pinHint">Secure access to your account</div><input id="pinInput" class="pinInputPro" inputmode="numeric" maxlength="4" type="password" placeholder="••••" autocomplete="off"><button id="pinBtn" class="pinBtnPro">Continue <span>→</span></button></div><div class="pinFooter">Vetri Vinayaga Auto Finance · ESTD. 2020</div></div>`;document.body.appendChild(box);document.getElementById('pinBtn').onclick=()=>submitPin(mode);setTimeout(()=>document.getElementById('pinInput')?.focus(),120);if(mode==='login')v69AddBiometricButton()}async function submitPin(mode){let v=document.getElementById('pinInput').value;if(!/^\d{4}$/.test(v))return toast('4 digit PIN enter பண்ணுங்க');if(mode==='login'){let until=getLockout();if(until&&until>Date.now())return toast('Too many attempts. 30 sec wait பண்ணுங்க')}let h=await hashPin(v);if(mode==='setup'){try{localStorage.setItem(PIN_KEY,h);let ok=await unlockSecure(v,'setup');if(!ok)throw new Error('setup');await repairSchedules();sessionStorage.setItem('vvaf_unlocked','1');document.getElementById('pinOverlay').remove();render();scheduleAutoLock();toast('Secure data enabled ✓')}catch(e){localStorage.removeItem(PIN_KEY);return toast('Secure setup failed')}}if(mode==='login'){try{let ok=await unlockSecure(v,'login');if(!ok)throw new Error('unlock');localStorage.setItem(PIN_KEY,h);sessionStorage.setItem('vvaf_unlocked','1');sessionStorage.setItem(FAIL_KEY,'0');await repairSchedules();document.getElementById('pinOverlay').remove();render();scheduleAutoLock();}catch(e){let until=registerPinFailure();return toast(until?'Too many wrong PINs. 30 sec lockout':'Wrong PIN')}}if(mode==='change'){toast('Use Change PIN from Settings')}}
 
-if(!localStorage.getItem(PIN_KEY))showLogin('setup');else showLogin('login');
+const FRESH_START_KEY='vvaf_manual_clean_start_v2';
+async function ensureFreshManualStart(){
+  if(localStorage.getItem(FRESH_START_KEY)==='1')return;
+  try{await idbDel('secure_db')}catch(e){}
+  try{await idbDel('biometric_db')}catch(e){}
+  try{await idbDel(BIOMETRIC_PIN_WRAP_KEY)}catch(e){}
+  [SECURE_KEY,KEY,BIOMETRIC_META_KEY,BIOMETRIC_BLOB_KEY,BIOMETRIC_PIN_WRAP_KEY,'vvaf_biometric_enabled_v1',PIN_KEY,FAIL_KEY,FAIL_UNTIL_KEY,LOCKOUT_KEY].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+  try{sessionStorage.clear()}catch(e){}
+  db=normalizeDb(null); legacyDb=normalizeDb(null); secureReady=false;secureCryptoKey=null;pinCryptoKey=null;biometricCryptoKey=null;
+  localStorage.setItem(FRESH_START_KEY,'1');
+}
+ensureFreshManualStart().then(()=>{
+  if(!localStorage.getItem(PIN_KEY))showLogin('setup');else showLogin('login');
+}).catch(()=>showLogin('setup'));
 </script><script>(function(){const el=document.getElementById('v70Privacy');function hide(){if(el)el.classList.add('show')}function show(){if(el)el.classList.remove('show')}document.addEventListener('visibilitychange',()=>document.hidden?hide():show());window.addEventListener('pagehide',hide);window.addEventListener('pageshow',show);document.addEventListener('contextmenu',e=>e.preventDefault())})();</script><script>['click','touchstart','keydown','input'].forEach(e=>document.addEventListener(e,()=>resetAutoLock(),{passive:true}));if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(()=>{}));</script></body></html>
