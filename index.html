@@ -633,12 +633,14 @@ async function v69AddBiometricButton(){
     if(raw){await decryptSecure(raw,p)}else{
       let blob=await encryptDb(db,p);await idbSet('secure_db',blob);localStorage.removeItem(SECURE_KEY);raw=blob;
     }
-    let wrapBlob=await encryptWithKey(new TextEncoder().encode(p),biometricCryptoKey);await idbSet(BIOMETRIC_PIN_WRAP_KEY,wrapBlob);
+    let wrapBlob=await encryptWithKey(new TextEncoder().encode(p),biometricCryptoKey);await idbSet(BIOMETRIC_PIN_WRAP_KEY,wrapBlob);localStorage.setItem(BIOMETRIC_PIN_WRAP_KEY,JSON.stringify(wrapBlob));
     let r=await decryptSecure(raw,p);db=r.db;pinCryptoKey=r.key;secureCryptoKey=r.key;secureSalt=unb64(raw.salt);
     let meta=biometricMeta(),salt=unb64(meta.prfSalt),bb=await encryptDb(db,biometricCryptoKey,salt);await idbSet('biometric_db',bb);localStorage.removeItem(BIOMETRIC_BLOB_KEY);
     toast('Fingerprint setup synced ✓');
    }else{
     // biometricUnlock() already loaded the authoritative PIN database when the wrap exists.
+    // Keep a localStorage copy as a durable fallback so fingerprint never asks for PIN again.
+    try{localStorage.setItem(BIOMETRIC_PIN_WRAP_KEY,JSON.stringify(wrap))}catch(e){}
    }
   }catch(e){console.error('Fingerprint/PIN sync failed',e);return toast('Fingerprint sync failed — PIN unchanged')}
   clearTimeout(autoLockTimer);document.getElementById('pinOverlay')?.remove();render();scheduleAutoLock();toast('Fingerprint unlock successful ✓');
