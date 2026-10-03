@@ -1,0 +1,10 @@
+V78 EXISTING LOAN IMPORT
+
+1. Open VVAF-Existing-Loan-Import-Template.xlsx in Excel.
+2. Enter one old loan per row.
+3. Paid Amount must be EMI collected only; do not include penalty.
+4. Paid Installments = EMI count already completed.
+5. Status can be Active, Overdue, Closed, or left blank for auto classification.
+6. Save/export the filled sheet as CSV for upload, OR copy the Excel rows and paste into the app.
+7. App validates rows before import. Existing V77 data is not deleted or replaced.
+8. Opening Paid is stored separately, so old collections are not counted as today's income.
